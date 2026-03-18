@@ -185,7 +185,15 @@ uv run pytest tests/path/to/test_file.py::test_name
 - [ ] Example `mcp.json` configs for both `sqlite` and `dynamodb` identity backends
 - [ ] `schema/init_db.sql` — SQLite schema and seed data for local testing
 
-### Phase 5 — Future
+### Phase 5 — Ingestion Tool
+- [ ] `sentinel/tools/ingest.py` — CLI/MCP tool to ingest documents into the knowledge store with `access_tags` metadata attached
+- [ ] Accept input: document path (or text), target tags, and destination knowledge store
+- [ ] Validate that all provided tags exist in the Identity Store before ingestion (no orphan tags)
+- [ ] Bedrock ingestion: upload source doc to S3, sync to Bedrock KB with `access_tags` in metadata
+- [ ] SQLite/local ingestion path for development: chunk document and insert into a local vector store with correct metadata
+- [ ] Dry-run mode: preview what metadata would be attached without committing the ingestion
+
+### Phase 6 — Future
 - [ ] Pinecone knowledge connector
 - [ ] ChromaDB knowledge connector
 - [ ] Multi-tag OR / AND policy modes

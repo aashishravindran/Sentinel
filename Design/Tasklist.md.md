@@ -32,6 +32,20 @@
 - [ ] Create an example `mcp.json` showing how to toggle between `sqlite` and `dynamodb` using `SENTINEL_IDENTITY_STORE` environment variable.
     
 
+### Phase 5: Ingestion Tool (The On-Ramp)
+
+- [ ] Create `sentinel/tools/ingest.py` — a CLI/MCP tool for ingesting documents into the knowledge store with `access_tags` metadata attached.
+
+- [ ] Accept inputs: document path (or raw text), list of `access_tags`, and target knowledge store backend.
+
+- [ ] **Tag Validation:** Before ingesting, verify that all provided tags exist in the Identity Store to prevent orphan tags that no user can ever match.
+
+- [ ] **Bedrock Ingestion Path:** Upload source document to S3, then trigger a Bedrock KB sync with `access_tags` embedded in the document metadata.
+
+- [ ] **Local Ingestion Path (dev):** Chunk the document and insert into a local vector store with correct `access_tags` metadata — for testing without AWS dependencies.
+
+- [ ] **Dry-Run Mode:** Add a `--dry-run` flag that previews what metadata would be attached and what validation checks would run, without committing the ingestion.
+
 ---
 
 ### Final Next Step for You:
