@@ -1,1 +1,19 @@
 .obsidian/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+
+# Environment
+.env
+
+# Runtime data (sqlite db, chroma vectors) — keep the data/ dir but not contents
+data/*
+!data/.gitkeep
+
+# Model cache
+.cache/

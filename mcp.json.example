@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "sentinel-rag": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "sentinel.main"],
+      "env": {
+        "SENTINEL_IDENTITY_STORE": "sqlite",
+        "SQLITE_DB_PATH": "/absolute/path/to/Sentinel/data/permissions.db",
+        "SENTINEL_KNOWLEDGE_STORE": "chroma",
+        "CHROMA_PATH": "/absolute/path/to/Sentinel/data/chroma",
+        "CHROMA_COLLECTION": "sentinel",
+        "EMBEDDING_MODEL": "all-MiniLM-L6-v2"
+      }
+    }
+  }
+}
