@@ -2,6 +2,12 @@ import os
 
 from fastmcp import FastMCP
 
+# Minimum cosine similarity for a result to be considered relevant.
+# Below this threshold the query topic is not covered by docs the user can access,
+# so we return a clear "no access" message rather than feeding the LLM low-signal
+# content that leads to hallucination.
+MIN_RELEVANCE_SCORE = float(os.environ.get("MIN_RELEVANCE_SCORE", "0.25"))
+
 from sentinel.core.engine import SentinelEngine, AccessDeniedError
 from sentinel.connectors.identity.sqlite import SQLiteIdentityConnector
 from sentinel.connectors.knowledge.chroma import ChromaKnowledgeConnector
@@ -43,11 +49,16 @@ async def secure_search(query: str, user_id: str, n_results: int = 5) -> str:
     except AccessDeniedError as e:
         return f"Access Denied: {e}"
 
-    if not results:
-        return "No results found within your authorized scope."
+    relevant = [r for r in results if r["score"] >= MIN_RELEVANCE_SCORE]
+
+    if not relevant:
+        return (
+            "You do not have access to documents relevant to this query. "
+            "The information may exist but is not within your permitted scope."
+        )
 
     formatted = []
-    for i, r in enumerate(results, 1):
+    for i, r in enumerate(relevant, 1):
         title = r["metadata"].get("title", "")
         header = f"[{i}] {title}" if title else f"[{i}]"
         formatted.append(f"{header} (score: {r['score']})\n{r['text']}")
