@@ -1,52 +1,61 @@
 # Tasklist.md (Implementation Guide)
 
-**Instructions for Claude:** Implement the Sentinel RAG MCP server using Python and `FastMCP`.
+---
 
-### Phase 1: Core Framework (The Plumbing)
+### Phase 1: Core Framework (The Plumbing) ✅ Complete
 
-- [ ] Create `sentinel/core/base.py` containing the `IdentityConnector` and `KnowledgeConnector` abstract classes.
-    
-- [ ] Create `sentinel/core/engine.py` (The Orchestrator) that implements the logic: `tags = await id_store.get_tags(user_id) -> await kb_store.search(query, tags)`.
-    
-- [ ] Implement `sentinel/main.py` using `FastMCP` to define the `secure_search` tool.
-    
+- [x] Create `sentinel/core/base.py` containing the `IdentityConnector` and `KnowledgeConnector` abstract classes.
 
-### Phase 2: Identity Connectors (The Vaults)
+- [x] Create `sentinel/core/engine.py` (The Orchestrator) that implements the logic: `tags = await id_store.get_tags(user_id) -> await kb_store.search(query, tags)`.
 
-- [ ] **SQLite Implementation:** Build `sentinel/connectors/identity/sqlite.py`. Use `aiosqlite`. Table: `permissions` with columns `user_id` and `tag`.
-    
+- [x] Implement `sentinel/main.py` using `FastMCP` to define the `secure_search` tool.
+
+
+### Phase 2: Identity Connectors (The Vaults) — Partial
+
+- [x] **SQLite Implementation:** `sentinel/connectors/identity/sqlite.py`. Uses `aiosqlite`. Table: `permissions` with columns `user_id` and `tag`. Seeded via `scripts/init_db.py`.
+
 - [ ] **DynamoDB Implementation:** Build `sentinel/connectors/identity/ddb.py`. Use `aioboto3`. Fetch item by `user_id` and return the `tags` String Set.
-    
 
-### Phase 3: Knowledge Connectors (The Search)
+
+### Phase 3: Knowledge Connectors (The Search) — Partial
+
+- [x] **ChromaDB Implementation:** `sentinel/connectors/knowledge/chroma.py`. Uses local `sentence-transformers` (`all-MiniLM-L6-v2`) for dense embeddings. Tags stored as boolean metadata fields for native `$or` filtering. Relevance score is cosine similarity — used post-retrieval as an anti-hallucination quality gate, not as an access control mechanism.
 
 - [ ] **Bedrock Implementation:** Build `sentinel/connectors/knowledge/bedrock.py`. Use `boto3` (Bedrock Agent Runtime).
-    
-- [ ] **Metadata Logic:** Implement the translation of Python `set` tags into Bedrock's `retrievalConfiguration` filter JSON.
-    
 
-### Phase 4: Integration & UX
+- [ ] **Bedrock Metadata Logic:** Implement the translation of Python `set` tags into Bedrock's `retrievalConfiguration` filter JSON.
 
-- [ ] Implement "Fail-Closed" logic: if `get_tags` returns an empty set, the search should not even trigger an API call to the Knowledge Store.
-    
-- [ ] Create an example `mcp.json` showing how to toggle between `sqlite` and `dynamodb` using `SENTINEL_IDENTITY_STORE` environment variable.
-    
 
-### Phase 5: Ingestion Tool (The On-Ramp)
+### Phase 4: Integration & UX ✅ Complete
 
-- [ ] Create `sentinel/tools/ingest.py` — a CLI/MCP tool for ingesting documents into the knowledge store with `access_tags` metadata attached.
+- [x] **Fail-Closed enforcement:** if `get_tags` returns an empty set, `AccessDeniedError` is raised and no KB call is made.
 
-- [ ] Accept inputs: document path (or raw text), list of `access_tags`, and target knowledge store backend.
+- [x] **Relevance threshold (`MIN_RELEVANCE_SCORE=0.25`):** results below the threshold are dropped after retrieval. If nothing passes, Sentinel returns a clear "no access" message instead of feeding the LLM low-signal documents that cause hallucination. Configurable via env var.
+
+- [x] **OR access policy:** a document tagged `[finance, engineering]` is accessible to any user holding `finance` OR `engineering`. Implemented via ChromaDB `$or` metadata filter.
+
+- [x] `mcp.json.example` and `.mcp.json` (project-scoped) showing env var configuration for both SQLite and ChromaDB backends.
+
+- [x] `schema/init_db.sql` and `scripts/init_db.py` for SQLite setup with seed users.
+
+- [x] **Integration test suite** (`tests/`) — 17 tests covering fail-closed, OR policy, relevance threshold, per-user retrieval, and upsert. All passing.
+
+
+### Phase 5: Ingestion Tool (The On-Ramp) — Partial
+
+- [x] **`ingest_document` MCP tool** in `sentinel/main.py` — callable directly from any MCP client to ingest text with `access_tags` and optional title metadata.
+
+- [x] **`scripts/ingest_seed_docs.py`** — reads `.md` files from `docs/seed/`, extracts `access_tags` from trailing HTML comment, and ingests into ChromaDB. Used to load the 7 seed documents.
+
+- [x] **Seed documents** (`docs/seed/`) — 7 `.md` files spanning `public`, `finance`, `engineering`, and `finance+engineering` access tiers for end-to-end testing.
 
 - [ ] **Tag Validation:** Before ingesting, verify that all provided tags exist in the Identity Store to prevent orphan tags that no user can ever match.
 
 - [ ] **Bedrock Ingestion Path:** Upload source document to S3, then trigger a Bedrock KB sync with `access_tags` embedded in the document metadata.
 
-- [ ] **Local Ingestion Path (dev):** Chunk the document and insert into a local vector store with correct `access_tags` metadata — for testing without AWS dependencies.
-
 - [ ] **Dry-Run Mode:** Add a `--dry-run` flag that previews what metadata would be attached and what validation checks would run, without committing the ingestion.
 
----
 
 ### Phase 6: Hybrid RAG Pipeline (Query Transformation + BM25 + RRF)
 
@@ -64,10 +73,8 @@ The current implementation is a single-stage dense vector search. This phase upg
 
 ---
 
-### Final Next Step for You:
+### Phase 7: Future Connectors
 
-You can now copy these three blocks into a new prompt for a coding-focused LLM (like Claude 3.5 Sonnet) and say:
-
-> "Based on the attached Architecture, Design, and Tasklist, please generate the full Python implementation for the Sentinel RAG MCP server. Start with Phase 1 and 2."
-
-**Would you like me to generate a sample `permissions.db` (SQLite) initialization script so you can test Phase 2 immediately?**
+- [ ] Pinecone knowledge connector
+- [ ] DynamoDB identity connector
+- [ ] ChromaDB → Bedrock migration path
