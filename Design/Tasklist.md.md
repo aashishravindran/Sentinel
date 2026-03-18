@@ -48,6 +48,22 @@
 
 ---
 
+### Phase 6: Hybrid RAG Pipeline (Query Transformation + BM25 + RRF)
+
+The current implementation is a single-stage dense vector search. This phase upgrades it to a full retrieval pipeline. All stages must operate within the tag-filtered scope — access control is enforced before any retrieval runs.
+
+- [ ] **Query Transformation:** Before retrieval, rewrite or expand the user's query (e.g. via LLM call) to improve recall — handle abbreviations, typos, and under-specified queries.
+
+- [ ] **BM25 / Sparse Search:** Add a keyword-based retrieval stage alongside the dense vector search. BM25 catches exact term matches that dense models miss due to embedding space distance. Implement as a second retrieval path over the same tag-filtered document set.
+
+- [ ] **Reciprocal Rank Fusion (RRF):** Merge the ranked lists from dense search and BM25 into a single result list using RRF scoring (`1 / (k + rank)`). RRF is robust to score scale differences between sparse and dense retrievers.
+
+- [ ] **Dense vs Sparse Evaluation:** Benchmark retrieval quality across query types (keyword-heavy vs semantic/paraphrase) to understand where each model wins. Document findings.
+
+- [ ] **Re-ranking (optional):** Add a cross-encoder re-ranker (e.g. `cross-encoder/ms-marco-MiniLM-L-6-v2`) as a final stage to re-score the fused top-K results with higher accuracy before returning to the LLM.
+
+---
+
 ### Final Next Step for You:
 
 You can now copy these three blocks into a new prompt for a coding-focused LLM (like Claude 3.5 Sonnet) and say:

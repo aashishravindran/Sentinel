@@ -12,8 +12,10 @@
 ### Knowledge Metadata Schema
 
 - Every document/chunk MUST contain an `access_tags` field.
-    
-- Sentinel enforces a **Intersection Policy**: User must possess at least one tag present on the document to retrieve it.
+
+- Sentinel enforces an **OR policy**: User must possess at least one tag present on the document to retrieve it (intersection of user tags and doc tags must be non-empty).
+
+- Access control (tag filter) and result quality (relevance score) are separate mechanisms. The tag filter is the security boundary. The relevance score (`MIN_RELEVANCE_SCORE`, default 0.25) is applied after retrieval to drop documents that are authorised but not relevant to the query — preventing LLM hallucination from low-signal results. It does not grant or deny access.
     
 
 ## 2. Interface Definitions (Python)
