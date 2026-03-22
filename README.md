@@ -194,6 +194,72 @@ See [QUICKSTART.md](QUICKSTART.md) for full setup instructions, all three AWS au
 
 ---
 
+## Extending Sentinel: Custom Connectors
+
+Sentinel is built to be extensible. You can easily plug in your own Identity Provider or Vector Knowledge Base by implementing our core interfaces.
+
+### 1. Identity Connector
+
+The `IdentityConnector` is responsible for the "Handshake." It fetches the source of truth for a user's permissions.
+
+```python
+from sentinel.core.base import IdentityConnector
+
+class MyCustomIdentity(IdentityConnector):
+    async def get_tags(self, user_id: str) -> set[str]:
+        """
+        Fetch permission tags (e.g., ['dept:finance', 'role:admin'])
+        for a specific user.
+
+        NOTE: Always fail-closed. Return an empty set if user is not found.
+        """
+        # Your logic here (e.g., API call to Okta, Auth0, or custom SQL)
+        tags = await my_api.fetch_user_metadata(user_id)
+        return set(tags)
+```
+
+### 2. Knowledge Connector
+
+The `KnowledgeConnector` handles the "Enforcement." It translates those tags into a database-native filter.
+
+```python
+from sentinel.core.base import KnowledgeConnector
+
+class MyCustomVectorStore(KnowledgeConnector):
+    async def search(self, query: str, tags: set[str], n_results: int = 5) -> list[dict]:
+        """
+        Execute a filtered vector search.
+        Results must be a list of dicts: {"text": str, "metadata": dict, "score": float}
+        """
+        filter_criteria = {"access_tags": {"$in": list(tags)}}
+        return await self.client.query(query, filter=filter_criteria, limit=n_results)
+
+    async def ingest(self, text: str, access_tags: list[str], doc_id: str, metadata: dict) -> None:
+        """Securely persist data with mandatory access tags."""
+        metadata["access_tags"] = access_tags
+        await self.client.upsert(id=doc_id, vector=self.embed(text), metadata=metadata)
+```
+
+### 🔌 Wiring It Up
+
+Once your classes are ready, register them in `sentinel/main.py`:
+
+```python
+def _build_engine():
+    # ... existing logic ...
+    if identity_store == "my_custom_id":
+        identity = MyCustomIdentity(config.custom_url)
+
+    if knowledge_store == "my_custom_store":
+        knowledge = MyCustomVectorStore(config.db_api_key)
+
+    return SentinelEngine(identity, knowledge)
+```
+
+For the full guide — including unit test templates, E2E test conventions, and a reference layout — see **[DEVELOPMENT.md](DEVELOPMENT.md)**.
+
+---
+
 ## MCP Tools
 
 | Tool | Description |
