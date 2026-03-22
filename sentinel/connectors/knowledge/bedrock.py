@@ -75,7 +75,6 @@ class BedrockKnowledgeConnector(KnowledgeConnector):
         self.reranking = reranking
         self.rerank_model_arn = rerank_model_arn or _DEFAULT_RERANK_MODEL.format(region=region)
         self.rerank_oversample = max(1, rerank_oversample)
-        self._session = aioboto3.Session()
 
     def _build_filter(self, tags: set[str]) -> dict:
         """OR filter: return docs where the user holds at least one access tag."""
@@ -129,7 +128,7 @@ class BedrockKnowledgeConnector(KnowledgeConnector):
         if self.reranking:
             call_kwargs["rerankingConfiguration"] = self._build_reranking_config(n_results)
 
-        async with self._session.client(
+        async with aioboto3.Session().client(
             "bedrock-agent-runtime", region_name=self.region
         ) as client:
             response = await client.retrieve(**call_kwargs)
@@ -166,7 +165,7 @@ class BedrockKnowledgeConnector(KnowledgeConnector):
 
         metadata_doc = {"metadataAttributes": attrs}
 
-        async with self._session.client("s3", region_name=self.region) as s3:
+        async with aioboto3.Session().client("s3", region_name=self.region) as s3:
             await s3.put_object(
                 Bucket=self.s3_bucket, Key=s3_key, Body=text.encode("utf-8")
             )
@@ -179,7 +178,7 @@ class BedrockKnowledgeConnector(KnowledgeConnector):
 
         # Trigger KB sync if a data source ID is configured
         if self.data_source_id:
-            async with self._session.client(
+            async with aioboto3.Session().client(
                 "bedrock-agent", region_name=self.region
             ) as client:
                 await client.start_ingestion_job(
