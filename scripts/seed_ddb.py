@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Aashish Ravindran. All rights reserved.
+# Use of this software is governed by the Elastic License 2.0
+# found in the LICENSE file.
+
 #!/usr/bin/env python3
 """
 scripts/seed_ddb.py — Seed the DynamoDB identity table with example users.

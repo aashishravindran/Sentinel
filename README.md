@@ -1,6 +1,10 @@
 # Sentinel
 
+[![License: EL2](https://img.shields.io/badge/License-Elastic_2.0-blue.svg)](LICENSE)
+
 > **Compliance-as-Code for AI.** Sentinel is a security middleware layer that enforces per-user access control on RAG pipelines — so your LLM only ever sees what it's allowed to know.
+
+> **License:** Sentinel is licensed under the [Elastic License 2.0](LICENSE). You may self-host and modify it freely. You may **not** offer it as a hosted or managed service to third parties.
 
 ---
 
@@ -249,3 +253,13 @@ secure_search("company overview", user_id="unknown_user")
 ## Why Sentinel?
 
 Sentinel isn't just a search tool — it's a **Compliance-as-Code** layer for AI. It allows CISOs to say **yes** to Generative AI by providing a hard security boundary that agents cannot bypass, prompt-engineer around, or hallucinate past.
+
+---
+
+## License
+
+Sentinel is licensed under the [Elastic License 2.0](LICENSE).
+
+You are free to use, modify, and self-host Sentinel. You may **not** offer Sentinel (or a substantially similar derivative) as a hosted or managed service to third parties without a separate commercial agreement.
+
+Copyright (c) 2026 Aashish Ravindran. All rights reserved.
