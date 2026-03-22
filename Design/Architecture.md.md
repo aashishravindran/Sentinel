@@ -68,22 +68,133 @@ The current implementation uses a **dense embedding model** (`all-MiniLM-L6-v2`)
 **Why this matters for Sentinel:** a dense-only pipeline can return a low score for a highly relevant document simply because the query phrasing differs from the training data. A sparse model would catch exact matches the dense model misses. This motivates the hybrid retrieval approach planned in Phase 6.
 
 
-## 6. Planned: Full Hybrid RAG Pipeline (Phase 6)
+## 6. Connector Architecture
 
-The current implementation is a **single-stage dense vector search**. A production-grade RAG pipeline would add:
+Sentinel supports two complete backend configurations. Each pairs an identity connector (who are you?) with a knowledge connector (what can you see?).
+
+### 6a. Local Development — SQLite + ChromaDB
+
+```
+MCP Client
+  │
+  └─► sentinel.main.py (_build_engine)
+        │
+        ├─► SQLiteIdentityConnector          ← data/permissions.db
+        │     user_id → tags (JSON column)
+        │
+        └─► ChromaKnowledgeConnector         ← data/chroma/
+              all-MiniLM-L6-v2 embeddings (384D)
+              where clause: {"$or": [{"tag_X": true}, ...]}
+              Dense vector search only (HNSW)
+```
+
+- **Identity:** SQLite file at `SQLITE_DB_PATH`. Schema: `users(user_id TEXT PK, tags TEXT)` where tags is a JSON array.
+- **Knowledge:** Local ChromaDB with sentence-transformers `all-MiniLM-L6-v2` for embeddings. OR-policy filtering via Chroma `where` clause with boolean tag attributes.
+- **Setup:** `python scripts/init_db.py` creates the DB and seeds users. `python scripts/ingest_seed_docs.py` loads sample documents.
+
+### 6b. AWS Production — DynamoDB + Bedrock Knowledge Bases
+
+```
+MCP Client
+  │
+  └─► sentinel.main.py (_build_engine)
+        │
+        ├─► DynamoDBIdentityConnector        ← DynamoDB table
+        │     user_id (PK) → tags (String Set)
+        │     aioboto3 async client
+        │
+        └─► BedrockKnowledgeConnector        ← Bedrock KB + OpenSearch Serverless
+              │
+              ├─ Search: bedrock-agent-runtime.retrieve()
+              │    overrideSearchType: HYBRID (dense + BM25 via RRF)
+              │    OR-filter: {"orAll": [{"equals": {"key": "tag_X", "value": true}}]}
+              │    Optional: reranking via amazon.rerank-v1:0 cross-encoder
+              │
+              └─ Ingest: S3 put_object + .metadata.json sidecar
+                   bedrock-agent.start_ingestion_job() triggers KB sync
+```
+
+**Search pipeline detail:**
+
+```
+secure_search(query, user_id)
+  │
+  ├─ DynamoDB: get_tags(user_id) → {"finance", "public"}
+  │    (fail-closed if empty)
+  │
+  ├─ Build OR metadata filter:
+  │    {"orAll": [{"equals": {"key": "tag_finance", "value": true}},
+  │               {"equals": {"key": "tag_public",  "value": true}}]}
+  │
+  ├─ bedrock-agent-runtime.retrieve()
+  │    ├─ HYBRID search: dense vector (Titan Embed v2, 1024D) + BM25 keyword
+  │    ├─ Reciprocal Rank Fusion merges results
+  │    └─ Optional: cross-encoder reranking (oversample N×, then reduce)
+  │
+  ├─ Relevance threshold filter (MIN_RELEVANCE_SCORE, default 0.25)
+  │
+  └─ Return formatted results to LLM
+```
+
+**Ingestion pipeline detail:**
+
+```
+ingest_document / ingest_pdf
+  │
+  ├─ (ingest_pdf only) Extract pages via pypdf → per-page chunks
+  │
+  ├─ S3: put_object(documents/{doc_id}.txt)         — document text
+  ├─ S3: put_object(documents/{doc_id}.txt.metadata.json)  — sidecar
+  │       {"metadataAttributes": {"tag_finance": true, "tag_public": true,
+  │                               "access_tags": "finance,public", ...}}
+  │
+  └─ bedrock-agent.start_ingestion_job()   — triggers KB sync
+       (OpenSearch Serverless indexes the new document)
+```
+
+**AWS infrastructure (provisioned by `scripts/setup_aws.py`):**
+
+| Resource | Service | Purpose |
+|---|---|---|
+| Identity table | DynamoDB | `user_id` → `tags` (String Set) |
+| Document bucket | S3 | Stores `.txt` documents + `.metadata.json` sidecars |
+| KB service role | IAM | Trusted by Bedrock; grants S3 + AOSS + embed access |
+| Vector collection | OpenSearch Serverless | Hybrid knn + BM25 index |
+| Knowledge Base | Bedrock | Orchestrates embedding + vector storage |
+| Data Source | Bedrock | S3 → KB ingestion pipeline |
+
+### 6c. Connector Interface
+
+Both backends implement the same abstract interfaces (`sentinel/core/base.py`):
+
+```
+IdentityConnector (ABC)
+  async get_tags(user_id: str) → set[str]
+
+KnowledgeConnector (ABC)
+  async search(query: str, tags: set[str], n_results: int) → List[Dict]
+  async ingest(text: str, access_tags: list[str], doc_id: str, metadata: dict) → None
+```
+
+The `SentinelEngine` (`sentinel/core/engine.py`) is backend-agnostic — it only calls these interfaces. Switching backends is a configuration change in `.mcp.json`, not a code change.
+
+
+## 7. Hybrid Search (Implemented via Bedrock)
+
+The Bedrock connector implements the hybrid RAG pipeline described in Phase 6 of the original design:
 
 ```
 Query
   │
-  ├─► Query Transformation   (rewrite/expand query before retrieval)
+  ├─► Dense Vector Search    (Titan Embed v2 — semantic recall)
   │
-  ├─► Dense Vector Search    (ANN on embeddings — semantic recall)
-  │
-  ├─► BM25 / Sparse Search   (keyword recall — catches exact matches)
+  ├─► BM25 / Sparse Search   (OpenSearch keyword — exact match recall)
   │
   └─► RRF Fusion             (Reciprocal Rank Fusion — merge ranked lists)
           │
-          └─► Re-ranked, access-controlled results → LLM
+          ├─► Optional: Reranking (amazon.rerank-v1:0 cross-encoder)
+          │
+          └─► Access-controlled, relevance-filtered results → LLM
 ```
 
-All retrieval stages must operate **within the tag-filtered scope** — BM25 and dense search only run over documents the user is authorised to see.
+All retrieval stages operate **within the tag-filtered scope** — BM25 and dense search only run over documents the user is authorised to see. The filter is applied at the OpenSearch query level, not post-retrieval.

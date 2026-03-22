@@ -5,12 +5,25 @@
       "command": "uv",
       "args": ["run", "python", "-m", "sentinel.main"],
       "env": {
-        "SENTINEL_IDENTITY_STORE": "sqlite",
-        "SQLITE_DB_PATH": "/Users/raashish/Documents/Sentinel/data/permissions.db",
-        "SENTINEL_KNOWLEDGE_STORE": "chroma",
-        "CHROMA_PATH": "/Users/raashish/Documents/Sentinel/data/chroma",
-        "CHROMA_COLLECTION": "sentinel",
-        "EMBEDDING_MODEL": "all-MiniLM-L6-v2"
+        "SENTINEL_IDENTITY_STORE": "dynamodb",
+        "SENTINEL_KNOWLEDGE_STORE": "bedrock",
+
+        "AWS_REGION": "us-east-1",
+        "AWS_PROFILE": "default",
+
+        "DDB_TABLE_NAME": "sentinel-identity",
+
+        "BEDROCK_KB_ID": "QA9LVE2MIC",
+        "BEDROCK_S3_BUCKET": "sentinel-kb-docs",
+        "BEDROCK_S3_PREFIX": "documents/",
+        "BEDROCK_DS_ID": "7AZ42YWL1D",
+
+        "BEDROCK_SEARCH_TYPE": "HYBRID",
+        "BEDROCK_RERANKING": "false",
+        "BEDROCK_RERANK_MODEL_ARN": "arn:aws:bedrock:us-east-1::foundation-model/amazon.rerank-v1:0",
+        "BEDROCK_RERANK_OVERSAMPLE": "3",
+
+        "MIN_RELEVANCE_SCORE": "0.25"
       }
     }
   }

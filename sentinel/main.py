@@ -1,3 +1,5 @@
+import base64
+import io
 import os
 
 from fastmcp import FastMCP
@@ -20,6 +22,11 @@ def _build_engine() -> SentinelEngine:
     if identity_store == "sqlite":
         db_path = os.environ.get("SQLITE_DB_PATH", "./data/permissions.db")
         identity = SQLiteIdentityConnector(db_path)
+    elif identity_store == "dynamodb":
+        from sentinel.connectors.identity.ddb import DynamoDBIdentityConnector
+        table_name = os.environ["DDB_TABLE_NAME"]
+        region = os.environ.get("AWS_REGION", "us-east-1")
+        identity = DynamoDBIdentityConnector(table_name, region)
     else:
         raise ValueError(f"Unsupported identity store: '{identity_store}'")
 
@@ -28,6 +35,24 @@ def _build_engine() -> SentinelEngine:
         collection = os.environ.get("CHROMA_COLLECTION", "sentinel")
         embedding_model = os.environ.get("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
         knowledge = ChromaKnowledgeConnector(chroma_path, collection, embedding_model)
+    elif knowledge_store == "bedrock":
+        from sentinel.connectors.knowledge.bedrock import BedrockKnowledgeConnector
+        kb_id = os.environ["BEDROCK_KB_ID"]
+        s3_bucket = os.environ["BEDROCK_S3_BUCKET"]
+        s3_prefix = os.environ.get("BEDROCK_S3_PREFIX", "documents/")
+        data_source_id = os.environ.get("BEDROCK_DS_ID", "")
+        region = os.environ.get("AWS_REGION", "us-east-1")
+        search_type = os.environ.get("BEDROCK_SEARCH_TYPE", "HYBRID")
+        reranking = os.environ.get("BEDROCK_RERANKING", "false").lower() == "true"
+        rerank_model_arn = os.environ.get("BEDROCK_RERANK_MODEL_ARN", "")
+        rerank_oversample = int(os.environ.get("BEDROCK_RERANK_OVERSAMPLE", "3"))
+        knowledge = BedrockKnowledgeConnector(
+            kb_id, s3_bucket, s3_prefix, data_source_id, region,
+            search_type=search_type,
+            reranking=reranking,
+            rerank_model_arn=rerank_model_arn,
+            rerank_oversample=rerank_oversample,
+        )
     else:
         raise ValueError(f"Unsupported knowledge store: '{knowledge_store}'")
 
@@ -83,6 +108,93 @@ async def ingest_document(
     metadata = {"title": title} if title else {}
     await engine.ingest(text, access_tags, doc_id, metadata)
     return f"Document '{doc_id}' ingested successfully with tags: {access_tags}"
+
+
+@mcp.tool()
+async def ingest_pdf(
+    access_tags: list[str],
+    doc_id: str,
+    pdf_path: str = "",
+    pdf_base64: str = "",
+    title: str = "",
+    metadata: dict | None = None,
+) -> str:
+    """
+    Ingest a PDF into the knowledge base with the specified access tags.
+
+    The PDF is extracted page-by-page; each page is stored as a separate chunk
+    with ID '{doc_id}_page_{n}'. Only users whose permission tags intersect
+    with access_tags will be able to retrieve any chunk.
+
+    Provide exactly one of:
+      pdf_path:   absolute path to the PDF file on the server's filesystem.
+                  Preferred — avoids MCP message size limits entirely.
+      pdf_base64: base64-encoded PDF bytes. Only suitable for very small PDFs
+                  (<1MB) due to MCP message size constraints.
+
+    access_tags: list of tags controlling who can access this document.
+    doc_id:      unique identifier for this document (used as chunk ID prefix).
+    title:       optional human-readable title stored in chunk metadata.
+    metadata:    optional dict of additional metadata stored on every page chunk
+                 e.g. {"author": "Alice", "department": "finance", "source": "gdrive://..."}
+                 Values must be strings. Page-level keys (page, total_pages) are
+                 added automatically and will override any keys of the same name.
+    """
+    if not access_tags:
+        return "Error: access_tags cannot be empty. Every document must have at least one tag."
+
+    if not pdf_path and not pdf_base64:
+        return "Error: provide either pdf_path or pdf_base64."
+
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        return (
+            "Error: pypdf is not installed. "
+            "Add it to your dependencies: uv add pypdf"
+        )
+
+    if pdf_path:
+        try:
+            pdf_bytes = open(pdf_path, "rb").read()
+        except OSError as e:
+            return f"Error reading pdf_path: {e}"
+    else:
+        try:
+            pdf_bytes = base64.b64decode(pdf_base64)
+        except Exception:
+            return "Error: pdf_base64 is not valid base64-encoded content."
+
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    if len(reader.pages) == 0:
+        return "Error: PDF contains no pages."
+
+    base_meta = {k: str(v) for k, v in (metadata or {}).items()}
+    base_meta["title"] = title or doc_id
+
+    ingested = 0
+    errors = []
+    for n, page in enumerate(reader.pages, 1):
+        text = (page.extract_text() or "").strip()
+        if not text:
+            continue  # skip blank pages
+
+        chunk_id = f"{doc_id}_page_{n}"
+        chunk_meta = {**base_meta, "page": n, "total_pages": len(reader.pages)}
+        try:
+            await engine.ingest(text, access_tags, chunk_id, chunk_meta)
+            ingested += 1
+        except Exception as e:
+            errors.append(f"page {n}: {e}")
+
+    if errors:
+        return (
+            f"PDF '{doc_id}' partially ingested: {ingested} pages succeeded. "
+            f"Errors: {'; '.join(errors)}"
+        )
+    return (
+        f"PDF '{doc_id}' ingested successfully: {ingested} pages with tags {access_tags}."
+    )
 
 
 if __name__ == "__main__":
