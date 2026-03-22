@@ -117,22 +117,66 @@ The env block supports three authentication methods:
 
 **Option B: Static access keys (CI, Docker, or environments without ~/.aws)**
 ```json
-"env": {
-  "AWS_ACCESS_KEY_ID": "AKIA...",
-  "AWS_SECRET_ACCESS_KEY": "...",
-  "AWS_REGION": "us-east-1",
-  ...
+{
+  "mcpServers": {
+    "sentinel-rag": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "-m", "sentinel.main"],
+      "env": {
+        "SENTINEL_IDENTITY_STORE": "dynamodb",
+        "SENTINEL_KNOWLEDGE_STORE": "bedrock",
+
+        "AWS_REGION": "us-east-1",
+        "AWS_ACCESS_KEY_ID": "AKIA...",
+        "AWS_SECRET_ACCESS_KEY": "...",
+
+        "DDB_TABLE_NAME": "sentinel-identity",
+
+        "BEDROCK_KB_ID": "<from setup_aws.py output>",
+        "BEDROCK_S3_BUCKET": "<from setup_aws.py output>",
+        "BEDROCK_S3_PREFIX": "documents/",
+        "BEDROCK_DS_ID": "<from setup_aws.py output>",
+
+        "BEDROCK_SEARCH_TYPE": "HYBRID",
+        "BEDROCK_RERANKING": "false",
+        "MIN_RELEVANCE_SCORE": "0.25"
+      }
+    }
+  }
 }
 ```
 
 **Option C: Instance/task role (EC2, ECS, Lambda)**
 
-Omit all AWS auth variables. The SDK will use the instance metadata service automatically.
+Omit all AWS auth variables — the SDK resolves credentials from the instance metadata service automatically.
 
 ```json
-"env": {
-  "AWS_REGION": "us-east-1",
-  ...
+{
+  "mcpServers": {
+    "sentinel-rag": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "-m", "sentinel.main"],
+      "env": {
+        "SENTINEL_IDENTITY_STORE": "dynamodb",
+        "SENTINEL_KNOWLEDGE_STORE": "bedrock",
+
+        "AWS_REGION": "us-east-1",
+
+        "DDB_TABLE_NAME": "sentinel-identity",
+
+        "BEDROCK_KB_ID": "<from setup_aws.py output>",
+        "BEDROCK_S3_BUCKET": "<from setup_aws.py output>",
+        "BEDROCK_S3_PREFIX": "documents/",
+        "BEDROCK_DS_ID": "<from setup_aws.py output>",
+
+        "BEDROCK_SEARCH_TYPE": "HYBRID",
+        "BEDROCK_RERANKING": "false",
+        "MIN_RELEVANCE_SCORE": "0.25"
+      }
+    }
+  }
 }
 ```
 
