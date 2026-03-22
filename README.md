@@ -90,6 +90,44 @@ secure_search(query, user_id)
 | **Environment-Driven** | All secrets injected via `mcp.json` — nothing hardcoded |
 
 ---
+## 🔌 Ecosystem & Roadmap
+
+Sentinel is designed to be a plug-and-play security layer for any RAG stack. By decoupling the **Identity Provider** from the **Knowledge Base**, Sentinel ensures your security logic remains stateless, portable, and planet-scale.
+
+### 🟢 Currently Available
+These connectors are production-ready and can be used for local development or AWS-native deployments.
+
+| Category | Connector | Description |
+| :--- | :--- | :--- |
+| **Identity** | `SQLiteConnector` | Local-first identity store for development, prototyping, and CI/CD testing. |
+| **Identity** | `DynamoDBConnector` | High-performance AWS integration using **GSIs** for sub-10ms attribute-based lookups. |
+| **Knowledge** | `ChromaConnector` | Open-source vector database for local-first or self-hosted Agentic workflows. |
+| **Knowledge** | `BedrockConnector` | Native integration for teams leveraging **Knowledge Bases for Amazon Bedrock**. |
+
+---
+
+### 🟡 Coming Soon 
+We are actively expanding the ecosystem to support industry-standard managed services and complex relationship graphs.
+
+#### **Identity Connectors**
+* **SpiceDB (Zanzibar-scale):** Our first **Relationship-Based (ReBAC)** connector. This allows Sentinel to resolve deep, nested hierarchies (e.g., *User A → Member of Team B → Owner of Project C*) by querying a SpiceDB cluster in real-time.
+* **Okta/Auth0:** Native OIDC integration to map enterprise JWT claims directly to vector metadata filters.
+
+#### **Knowledge Connectors**
+* **Pinecone Serverless:** Direct integration with Pinecone’s high-performance metadata filtering engine. This enables security enforcement at the index level for millions of documents with sub-50ms latency.
+* **Elasticsearch/OpenSearch:** Support for hybrid search (BM25 + Vector) with native DLS (Document Level Security) mapping.
+
+---
+
+### 🛡️ The Sentinel Promise: Zero-Data Persistence
+Regardless of the connector used, Sentinel follows a strict **"Fetch, Filter, Flush"** lifecycle:
+1. **Fetch:** Retrieve user attributes or group memberships from the `IdentityConnector`.
+2. **Filter:** Synthesize a Boolean metadata tree (AND/OR/NOT).
+3. **Retrieve:** Execute a secured, filtered query via the `KnowledgeConnector`.
+4. **Flush:** Drop the context. Sentinel stores no user data, ensuring a truly stateless security boundary.
+
+
+
 
 ## Quick Start
 
