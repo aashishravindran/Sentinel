@@ -52,7 +52,7 @@ sequenceDiagram
 
 - **Protocol Native** — Built on the [Model Context Protocol (MCP)](https://modelcontextprotocol.io) for instant integration with Claude Desktop, Cursor, and any MCP-compatible IDE.
 - **Plug-and-Play Connectors** — AWS DynamoDB (identity) and Amazon Bedrock Knowledge Bases (knowledge), with SQLite + ChromaDB for local development.
-- **Enterprise-Grade RAG** — Hybrid search (BM25 + semantic vector) and optional cross-encoder reranking out of the box.
+- **Enterprise-Grade RAG** — Hybrid search (BM25 + semantic vector) and optional cross-encoder reranking out of the box. Currently only on AWS Bedrock Connector
 - **Domain Agnostic** — Designed for Healthcare, Legal, and Finance. Leave the domain expertise to the data; leave the security to Sentinel.
 
 ---
