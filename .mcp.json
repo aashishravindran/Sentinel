@@ -1,6 +1,26 @@
 {
   "mcpServers": {
-    "sentinel-rag": {
+    "sentinel-rag-local": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "-m", "sentinel.main"],
+      "cwd": "/Users/raashish/Documents/Sentinel",
+      "env": {
+        "SENTINEL_IDENTITY_STORE": "spicedb",
+        "SENTINEL_KNOWLEDGE_STORE": "chroma",
+
+        "SPICEDB_ENDPOINT": "localhost:50051",
+        "SPICEDB_TOKEN": "sentinel-local",
+        "SPICEDB_TLS": "false",
+
+        "CHROMA_PATH": "/Users/raashish/Documents/Sentinel/data/chroma",
+        "CHROMA_COLLECTION": "sentinel",
+
+        "MIN_RELEVANCE_SCORE": "0.25"
+      }
+    },
+
+    "sentinel-rag-aws": {
       "type": "stdio",
       "command": "uv",
       "args": ["run", "python", "-m", "sentinel.main"],

@@ -101,16 +101,18 @@ These connectors are production-ready and can be used for local development or A
 | :--- | :--- | :--- |
 | **Identity** | `SQLiteConnector` | Local-first identity store for development, prototyping, and CI/CD testing. |
 | **Identity** | `DynamoDBConnector` | High-performance AWS integration using **GSIs** for sub-10ms attribute-based lookups. |
+| **Identity** | `SpiceDBConnector` | **Relationship-Based (ReBAC)** connector backed by [SpiceDB](https://github.com/authzed/spicedb). Resolves deep permission hierarchies via Zanzibar-style `LookupResources`. |
 | **Knowledge** | `ChromaConnector` | Open-source vector database for local-first or self-hosted Agentic workflows. |
 | **Knowledge** | `BedrockConnector` | Native integration for teams leveraging **Knowledge Bases for Amazon Bedrock**. |
 
+See [CONNECTORS.md](CONNECTORS.md) for full setup instructions for every connector.
+
 ---
 
-### 🟡 Coming Soon 
+### 🟡 Coming Soon
 We are actively expanding the ecosystem to support industry-standard managed services and complex relationship graphs.
 
 #### **Identity Connectors**
-* **SpiceDB (Zanzibar-scale):** Our first **Relationship-Based (ReBAC)** connector. This allows Sentinel to resolve deep, nested hierarchies (e.g., *User A → Member of Team B → Owner of Project C*) by querying a SpiceDB cluster in real-time.
 * **Okta/Auth0:** Native OIDC integration to map enterprise JWT claims directly to vector metadata filters.
 
 #### **Knowledge Connectors**
@@ -199,6 +201,8 @@ See [QUICKSTART.md](QUICKSTART.md) for full setup instructions, all three AWS au
 | `secure_search(query, user_id)` | Search the KB — returns only documents the user is authorised to see |
 | `ingest_document(text, access_tags, doc_id)` | Ingest a text document with access control tags |
 | `ingest_pdf(access_tags, doc_id, pdf_path)` | Ingest a PDF page-by-page with access tags and optional metadata |
+| `list_user_relationships(user_id)` | *(SpiceDB only)* List all raw SpiceDB relationship tuples for a user — useful for auditing and debugging |
+| `check_config()` | Return the runtime values of all Sentinel environment variables |
 
 ---
 
@@ -213,7 +217,8 @@ sentinel/
 └── connectors/
     ├── identity/
     │   ├── sqlite.py               # SQLite (local dev)
-    │   └── ddb.py                  # DynamoDB (production)
+    │   ├── ddb.py                  # DynamoDB (production)
+    │   └── spicedb.py              # SpiceDB ReBAC (local + production)
     └── knowledge/
         ├── chroma.py               # ChromaDB (local dev)
         └── bedrock.py              # AWS Bedrock KB (production)

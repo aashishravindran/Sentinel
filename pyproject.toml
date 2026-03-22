@@ -24,10 +24,16 @@ aws = [
     "aioboto3>=13.0",
     "boto3>=1.34",
 ]
+spicedb = [
+    "authzed>=0.8",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "e2e: end-to-end tests that require live backends (SpiceDB, ChromaDB, AWS)",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["sentinel"]

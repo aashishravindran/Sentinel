@@ -31,6 +31,20 @@ def _build_engine() -> SentinelEngine:
         table_name = os.environ["DDB_TABLE_NAME"]
         region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
         identity = DynamoDBIdentityConnector(table_name, region)
+    elif identity_store == "spicedb":
+        from sentinel.connectors.identity.spicedb import SpiceDBIdentityConnector
+        endpoint = os.environ["SPICEDB_ENDPOINT"]
+        token = os.environ["SPICEDB_TOKEN"]
+        tls = os.environ.get("SPICEDB_TLS", "true").lower() == "true"
+        resource_type = os.environ.get("SPICEDB_RESOURCE_TYPE", "tag")
+        permission = os.environ.get("SPICEDB_PERMISSION", "access")
+        user_type = os.environ.get("SPICEDB_USER_TYPE", "user")
+        identity = SpiceDBIdentityConnector(
+            endpoint, token, tls=tls,
+            resource_type=resource_type,
+            permission=permission,
+            user_type=user_type,
+        )
     else:
         raise ValueError(f"Unsupported identity store: '{identity_store}'")
 
@@ -220,6 +234,31 @@ async def ingest_pdf(
 
 
 @mcp.tool()
+async def list_user_relationships(user_id: str, ctx: Context) -> str:
+    """
+    List all SpiceDB relationships for a user — shows every tag they are a member of.
+    Only available when SENTINEL_IDENTITY_STORE=spicedb.
+    Useful for auditing permissions and debugging access issues.
+    """
+    from sentinel.connectors.identity.spicedb import SpiceDBIdentityConnector
+
+    if not isinstance(engine.identity, SpiceDBIdentityConnector):
+        store = os.environ.get("SENTINEL_IDENTITY_STORE", "NOT_SET")
+        return f"Error: list_user_relationships requires SENTINEL_IDENTITY_STORE=spicedb (current: {store})"
+
+    await ctx.info(f"list_user_relationships | user={user_id}")
+    rels = await engine.identity.read_relationships(user_id)
+
+    if not rels:
+        return f"No relationships found for user '{user_id}'."
+
+    lines = [f"Relationships for user '{user_id}':"]
+    for r in sorted(rels, key=lambda x: x["resource_id"]):
+        lines.append(f"  {r['resource_type']}:{r['resource_id']}  relation={r['relation']}")
+    return "\n".join(lines)
+
+
+@mcp.tool()
 async def check_config(ctx: Context) -> str:
     """
     Return the exact runtime values of all Sentinel environment variables.
@@ -243,6 +282,12 @@ async def check_config(ctx: Context) -> str:
         "AWS_REGION": os.environ.get("AWS_REGION", "NOT_SET"),
         "AWS_DEFAULT_REGION": os.environ.get("AWS_DEFAULT_REGION", "NOT_SET"),
         "AWS_PROFILE": os.environ.get("AWS_PROFILE", "NOT_SET"),
+        "SPICEDB_ENDPOINT": os.environ.get("SPICEDB_ENDPOINT", "NOT_SET"),
+        "SPICEDB_TOKEN": "***" if os.environ.get("SPICEDB_TOKEN") else "NOT_SET",
+        "SPICEDB_TLS": os.environ.get("SPICEDB_TLS", "NOT_SET"),
+        "SPICEDB_RESOURCE_TYPE": os.environ.get("SPICEDB_RESOURCE_TYPE", "NOT_SET"),
+        "SPICEDB_PERMISSION": os.environ.get("SPICEDB_PERMISSION", "NOT_SET"),
+        "SPICEDB_USER_TYPE": os.environ.get("SPICEDB_USER_TYPE", "NOT_SET"),
         "MIN_RELEVANCE_SCORE": os.environ.get("MIN_RELEVANCE_SCORE", "NOT_SET"),
     }
     await ctx.info("check_config called")

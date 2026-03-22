@@ -1,0 +1,21 @@
+/**
+ * Sentinel RAG — SpiceDB schema
+ *
+ * Each "tag" resource represents an access-control label (e.g. "finance",
+ * "engineering").  Users are granted access to a tag by being added as a
+ * `member` of that tag object.
+ *
+ * The Sentinel connector calls LookupResources asking:
+ *   "which tag objects does user:<id> have `access` on?"
+ * and returns the matching object IDs as the user's permission set.
+ */
+
+definition user {}
+
+definition tag {
+    /** member: users who hold this tag */
+    relation member: user
+
+    /** access: the permission Sentinel checks via LookupResources */
+    permission access = member
+}
