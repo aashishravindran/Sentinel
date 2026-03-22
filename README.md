@@ -1,14 +1,59 @@
-# Sentinel RAG
+# Sentinel
 
-Sentinel is a stateless MCP (Model Context Protocol) middleware server that enforces **Attribute-Based Access Control (ABAC)** on RAG (Retrieval-Augmented Generation) pipelines. It acts as a security layer between MCP clients (Claude Desktop, Cursor) and your vector databases — ensuring users only retrieve documents they are authorized to see.
+> **Compliance-as-Code for AI.** Sentinel is a security middleware layer that enforces per-user access control on RAG pipelines — so your LLM only ever sees what it's allowed to know.
 
-## The Problem
+---
 
-Standard RAG pipelines have no concept of per-user access control. When a user queries a knowledge base, they get back everything the vector search returns — regardless of whether they should see it. Sentinel fixes this by intercepting every query and filtering results based on the user's permissions before anything is returned to the LLM.
+## The Problem: The "RAG Leak"
+
+Current RAG implementations suffer from a critical security gap: **the LLM has no concept of Row-Level Security (RLS).**
+
+- **Stateless Models** — LLMs don't know who is asking the question unless you hardcode it.
+- **Metadata Drift** — Syncing user permissions into vector database metadata is a synchronisation nightmare.
+- **The Hallucination Risk** — You cannot "prompt-engineer" an AI to ignore private data it has already retrieved.
+
+The moment a document enters the LLM's context window, the security boundary is gone.
+
+---
+
+## The Solution: Sentinel Middleware
+
+Sentinel moves the security boundary **outside the model**. It sits between the AI and the data, performing a real-time **Permission Handshake** before a single byte of data is retrieved.
+
+```
+sequenceDiagram
+    participant AI as Claude / Cursor
+    participant S as Sentinel MCP
+    participant IV as Identity Vault (DDB / SQLite)
+    participant KB as Knowledge Base (Bedrock / Chroma)
+
+    AI->>S: secure_search(query, user_id)
+    S->>IV: get_tags(user_id)
+    IV-->>S: ["finance", "public"]
+    S->>S: Synthesize metadata filter
+    S->>KB: Filtered vector search (tags: finance OR public)
+    KB-->>S: Authorised chunks only
+    S-->>AI: Redacted context
+```
+
+**1. Unified Identity Vault** — Connect to your existing DynamoDB or SQLite permission tables. Sentinel fetches a user's Access Tags at the moment of the query.
+
+**2. Stateless Logic** — Sentinel holds no data. It translates high-level user identities into database-specific metadata filters (AWS Bedrock, ChromaDB, Pinecone) on the fly.
+
+**3. Fail-Closed Security** — If the Identity Vault doesn't explicitly grant a tag, Sentinel returns an empty result set. The AI never sees what it isn't allowed to know.
+
+---
+
+## Key Features
+
+- **Protocol Native** — Built on the [Model Context Protocol (MCP)](https://modelcontextprotocol.io) for instant integration with Claude Desktop, Cursor, and any MCP-compatible IDE.
+- **Plug-and-Play Connectors** — AWS DynamoDB (identity) and Amazon Bedrock Knowledge Bases (knowledge), with SQLite + ChromaDB for local development.
+- **Enterprise-Grade RAG** — Hybrid search (BM25 + semantic vector) and optional cross-encoder reranking out of the box.
+- **Domain Agnostic** — Designed for Healthcare, Legal, and Finance. Leave the domain expertise to the data; leave the security to Sentinel.
+
+---
 
 ## How It Works
-
-Sentinel decouples **who can see what** (Identity Store) from **what is stored** (Knowledge Store).
 
 ```
 Client (Claude Desktop / Cursor)
@@ -22,179 +67,185 @@ secure_search(query, user_id)
     │   [Fail-Closed: if tags = ∅ → deny, no KB call made]
     │
     ├─► Query Synthesis
-    │       └── tags → DB-specific metadata filter
+    │       └── tags → DB-native metadata filter
     │
-    ├─► Knowledge Store (Bedrock / Pinecone)
-    │       └── filtered ANN search → matching chunks
+    ├─► Knowledge Store (Bedrock / ChromaDB)
+    │       └── filtered hybrid search → authorised chunks
     │
-    └─► Formatted context string returned to LLM
+    └─► Formatted context returned to LLM
 ```
 
 ### Security Principles
 
-- **Zero Trust:** Never assumes a `user_id` has global access.
-- **Fail-Closed:** If a user has no tags, access is denied and no knowledge store call is made.
-- **Stateless:** No user data is cached between MCP sessions.
-- **Intersection Policy:** A document is returned only if the user holds at least one tag present in the document's `access_tags` metadata field.
-- **Environment-Driven:** All secrets and endpoints are injected via `mcp.json` environment variables — nothing is hardcoded.
+| Principle | Behaviour |
+|---|---|
+| **Zero Trust** | Never assumes a `user_id` has global access |
+| **Fail-Closed** | No tags = access denied before any KB call is made |
+| **Stateless** | No user data cached between MCP sessions |
+| **OR Policy** | Document returned if user holds ≥1 matching tag |
+| **Environment-Driven** | All secrets injected via `mcp.json` — nothing hardcoded |
 
-## Data Models
+---
 
-### Identity Store
+## Quick Start
 
-Maps `user_id` → a set of permission tags. Supported backends: **DynamoDB** (prod), **SQLite** (local dev).
-
-```
-user_id   │ tags
-──────────┼─────────────────────────────
-user_123  │ ["finance", "public", "project_x"]
-user_456  │ ["public"]
-```
-
-### Knowledge Store
-
-Every document chunk **must** contain an `access_tags` metadata field (list of strings). Sentinel translates the user's tag set into a database-native metadata filter before executing the vector search.
-
-Example Bedrock filter:
-```json
-{"equals": {"attr": "access_tag", "value": "finance"}}
-```
-
-## Project Structure
-
-```
-sentinel-rag/
-├── pyproject.toml                  # uv/poetry dependencies
-├── .env                            # Local dev variables (not for prod)
-├── sentinel/
-│   ├── main.py                     # FastMCP entry point & tool definitions
-│   ├── core/
-│   │   ├── base.py                 # Abstract Base Classes (IdentityConnector, KnowledgeConnector)
-│   │   └── engine.py               # Orchestrator — ABAC logic, tag intersection, fail-closed
-│   └── connectors/
-│       ├── identity/
-│       │   ├── sqlite.py           # SQLite connector (aiosqlite)
-│       │   └── ddb.py              # DynamoDB connector (aioboto3)
-│       └── knowledge/
-│           ├── bedrock.py          # AWS Bedrock Knowledge Bases connector
-│           └── pinecone.py         # Pinecone connector (future)
-├── schema/
-│   └── init_db.sql                 # SQLite schema for local testing
-└── tests/
-```
-
-## Connector Interfaces
-
-```python
-class IdentityConnector(ABC):
-    @abstractmethod
-    async def get_tags(self, user_id: str) -> set[str]:
-        """Fetch the permission tags for a user from the identity store."""
-
-class KnowledgeConnector(ABC):
-    @abstractmethod
-    async def search(self, query: str, tags: set[str]) -> List[Dict]:
-        """Execute a metadata-filtered vector search."""
-```
-
-## Setup & Integration
-
-### 1. Install dependencies
+### Local (SQLite + ChromaDB)
 
 ```bash
 uv sync
+python scripts/init_db.py
+python scripts/ingest_seed_docs.py
 ```
-
-### 2. Configure `mcp.json`
-
-Add Sentinel as an MCP server in your client's `mcp.json`. Toggle between backends using environment variables:
 
 ```json
 {
   "mcpServers": {
     "sentinel-rag": {
-      "command": "python",
-      "args": ["-m", "sentinel_mcp"],
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "-m", "sentinel.main"],
       "env": {
-        "SENTINEL_IDENTITY_STORE": "dynamodb",
-        "DDB_TABLE_NAME": "UserPermissions-Prod",
-        "AWS_REGION": "us-west-2",
-        "SENTINEL_KNOWLEDGE_STORE": "bedrock",
-        "BEDROCK_KB_ID": "ABC123XYZ"
+        "SENTINEL_IDENTITY_STORE": "sqlite",
+        "SQLITE_DB_PATH": "/path/to/data/permissions.db",
+        "SENTINEL_KNOWLEDGE_STORE": "chroma",
+        "CHROMA_PATH": "/path/to/data/chroma",
+        "CHROMA_COLLECTION": "sentinel",
+        "EMBEDDING_MODEL": "all-MiniLM-L6-v2"
       }
     }
   }
 }
 ```
 
-For local development with SQLite:
+### AWS (DynamoDB + Bedrock)
+
 ```json
 {
-  "env": {
-    "SENTINEL_IDENTITY_STORE": "sqlite",
-    "SQLITE_DB_PATH": "./schema/permissions.db",
-    "SENTINEL_KNOWLEDGE_STORE": "bedrock",
-    "BEDROCK_KB_ID": "ABC123XYZ"
+  "mcpServers": {
+    "sentinel-rag": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "-m", "sentinel.main"],
+      "env": {
+        "SENTINEL_IDENTITY_STORE": "dynamodb",
+        "SENTINEL_KNOWLEDGE_STORE": "bedrock",
+        "AWS_REGION": "us-east-1",
+        "AWS_PROFILE": "your-profile",
+        "DDB_TABLE_NAME": "your-identity-table",
+        "BEDROCK_KB_ID": "your-kb-id",
+        "BEDROCK_S3_BUCKET": "your-kb-bucket",
+        "BEDROCK_DS_ID": "your-datasource-id",
+        "BEDROCK_SEARCH_TYPE": "HYBRID"
+      }
+    }
   }
 }
 ```
 
-### Environment Variables
+See [QUICKSTART.md](QUICKSTART.md) for full setup instructions, all three AWS auth options, and reranking configuration.
 
-| Variable | Values | Description |
+---
+
+## MCP Tools
+
+| Tool | Description |
+|---|---|
+| `secure_search(query, user_id)` | Search the KB — returns only documents the user is authorised to see |
+| `ingest_document(text, access_tags, doc_id)` | Ingest a text document with access control tags |
+| `ingest_pdf(access_tags, doc_id, pdf_path)` | Ingest a PDF page-by-page with access tags and optional metadata |
+
+---
+
+## Project Structure
+
+```
+sentinel/
+├── main.py                         # FastMCP entry point — tool definitions
+├── core/
+│   ├── base.py                     # Abstract connectors (IdentityConnector, KnowledgeConnector)
+│   └── engine.py                   # Orchestrator — ABAC logic, fail-closed enforcement
+└── connectors/
+    ├── identity/
+    │   ├── sqlite.py               # SQLite (local dev)
+    │   └── ddb.py                  # DynamoDB (production)
+    └── knowledge/
+        ├── chroma.py               # ChromaDB (local dev)
+        └── bedrock.py              # AWS Bedrock KB (production)
+scripts/
+├── setup_aws.py                    # Demo provisioning script (not for production)
+├── seed_ddb.py                     # Seed DynamoDB with test users
+├── init_db.py                      # Initialise local SQLite DB
+└── ingest_seed_docs.py             # Bulk-ingest local seed documents
+```
+
+---
+
+## Access Control in Practice
+
+### What's in the knowledge base
+
+| Document | Tags | Who can access |
 |---|---|---|
-| `SENTINEL_IDENTITY_STORE` | `dynamodb`, `sqlite` | Identity backend to use |
-| `SENTINEL_KNOWLEDGE_STORE` | `bedrock`, `pinecone` | Knowledge backend to use |
-| `DDB_TABLE_NAME` | string | DynamoDB table name |
-| `AWS_REGION` | string | AWS region for DynamoDB/Bedrock |
-| `BEDROCK_KB_ID` | string | Bedrock Knowledge Base ID |
-| `SQLITE_DB_PATH` | file path | Path to local SQLite permissions DB |
+| Aashish Ravindran Resume | `recruitment`, `private` | Users with `recruitment` or `private` |
+| Q4 2025 Financial Report | `finance` | Users with `finance` |
+| Engineering Runbook | `engineering` | Users with `engineering` |
+| Company Overview | `public` | Everyone |
 
-### 3. Run locally
+### Identity store (DynamoDB)
 
-```bash
-python -m sentinel_mcp
+| User | Tags |
+|---|---|
+| `aashish` | `recruitment`, `private` |
+| `alice` | `finance`, `public` |
+| `bob` | `engineering`, `public` |
+| `charlie` | `finance`, `engineering`, `public` |
+
+### Example: Aashish asks about his own resume
+
+```
+secure_search("AWS experience", user_id="aashish")
 ```
 
-### 4. Run tests
+1. Identity store returns `{"recruitment", "private"}` for `aashish`
+2. Sentinel builds filter: `tag_recruitment = true OR tag_private = true`
+3. Bedrock retrieves the resume — it matches on `tag_private`
+4. Result returned to the LLM ✅
 
-```bash
-uv run pytest
-
-# Run a single test
-uv run pytest tests/path/to/test_file.py::test_name
+```
+[1] Aashish Ravindran Resume (score: 0.82)
+...experience with AWS Bedrock, DynamoDB, OpenSearch Serverless...
 ```
 
-## Roadmap
+### Example: Alice asks the same question
 
-### Phase 1 — Core Framework
-- [ ] `sentinel/core/base.py` — `IdentityConnector` and `KnowledgeConnector` ABCs
-- [ ] `sentinel/core/engine.py` — Orchestrator: `get_tags` → tag intersection → `search`
-- [ ] `sentinel/main.py` — FastMCP server with `secure_search` tool definition
+```
+secure_search("AWS experience", user_id="alice")
+```
 
-### Phase 2 — Identity Connectors
-- [ ] `sentinel/connectors/identity/sqlite.py` — `aiosqlite`-based connector; `permissions` table with `user_id` and `tag` columns
-- [ ] `sentinel/connectors/identity/ddb.py` — `aioboto3`-based connector; fetch item by `user_id`, return `tags` String Set
+1. Identity store returns `{"finance", "public"}` for `alice`
+2. Sentinel builds filter: `tag_finance = true OR tag_public = true`
+3. Bedrock finds no documents matching those tags that are relevant to the query
+4. Alice gets nothing — not because the query failed, but because she was never authorised to see it ✅
 
-### Phase 3 — Knowledge Connectors
-- [ ] `sentinel/connectors/knowledge/bedrock.py` — AWS Bedrock Agent Runtime connector
-- [ ] Metadata filter translation: Python `set[str]` → Bedrock `retrievalConfiguration` filter JSON
+```
+You do not have access to documents relevant to this query.
+The information may exist but is not within your permitted scope.
+```
 
-### Phase 4 — Integration & UX
-- [ ] Fail-Closed enforcement: if `get_tags` returns `∅`, skip knowledge store call entirely
-- [ ] Example `mcp.json` configs for both `sqlite` and `dynamodb` identity backends
-- [ ] `schema/init_db.sql` — SQLite schema and seed data for local testing
+The resume was never retrieved. Alice's LLM context was never contaminated with data she shouldn't see. No prompt engineering can change this — the filter runs before retrieval.
 
-### Phase 5 — Ingestion Tool
-- [ ] `sentinel/tools/ingest.py` — CLI/MCP tool to ingest documents into the knowledge store with `access_tags` metadata attached
-- [ ] Accept input: document path (or text), target tags, and destination knowledge store
-- [ ] Validate that all provided tags exist in the Identity Store before ingestion (no orphan tags)
-- [ ] Bedrock ingestion: upload source doc to S3, sync to Bedrock KB with `access_tags` in metadata
-- [ ] SQLite/local ingestion path for development: chunk document and insert into a local vector store with correct metadata
-- [ ] Dry-run mode: preview what metadata would be attached without committing the ingestion
+### Example: Unknown user
 
-### Phase 6 — Future
-- [ ] Pinecone knowledge connector
-- [ ] ChromaDB knowledge connector
-- [ ] Multi-tag OR / AND policy modes
-- [ ] Audit logging per query
+```
+secure_search("company overview", user_id="unknown_user")
+```
+
+1. Identity store returns `∅` — user not found
+2. Sentinel **fail-closes** immediately — no knowledge base call is made
+3. `Access Denied` returned before a single vector search executes ✅
+
+---
+
+## Why Sentinel?
+
+Sentinel isn't just a search tool — it's a **Compliance-as-Code** layer for AI. It allows CISOs to say **yes** to Generative AI by providing a hard security boundary that agents cannot bypass, prompt-engineer around, or hallucinate past.
