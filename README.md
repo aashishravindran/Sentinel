@@ -250,6 +250,24 @@ secure_search("company overview", user_id="unknown_user")
 
 ---
 
+## Research & Lineage
+
+Sentinel is inspired by the **Relationship-Based Access Control (ReBAC)** paradigm and the architectural principles laid out in Google's **Zanzibar** paper. While Zanzibar is designed for planet-scale authorisation (10M+ QPS), Sentinel brings those core security principles to the **Agentic RAG** ecosystem.
+
+> *"Sentinel acts as a Lightweight Handshake — providing the security of a ReBAC system without the infrastructure overhead of a full Zanzibar implementation."*
+
+### Key References
+
+- **Zanzibar: Google's Consistent, Global Authorization System** (Pang et al., USENIX ATC 2019)
+  [Read the paper →](https://www.usenix.org/system/files/atc19-pang.pdf)
+  *How Google manages billions of permissions across Drive, YouTube, and Cloud at 10M+ QPS.*
+
+- **Related implementations:** [SpiceDB](https://github.com/authzed/spicedb), [OpenFGA](https://openfga.dev/) — production ReBAC systems that inspired Sentinel's stateless, tag-intersection model.
+
+Traditional RAG fails at the retrieval layer by being identity-blind. By implementing a **Stateless Middleware** — as suggested by modern ReBAC implementations — Sentinel ensures security is enforced *before* the LLM sees a single byte of data.
+
+---
+
 ## Why Sentinel?
 
 Sentinel isn't just a search tool — it's a **Compliance-as-Code** layer for AI. It allows CISOs to say **yes** to Generative AI by providing a hard security boundary that agents cannot bypass, prompt-engineer around, or hallucinate past.

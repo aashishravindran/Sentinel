@@ -1,0 +1,37 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - family-names: "Ravindran"
+    given-names: "Aashish"
+    orcid: ""
+title: "Sentinel: Stateless MCP Middleware for Identity-Aware RAG"
+abstract: >
+  Sentinel is a Model Context Protocol (MCP) server implementing
+  Attribute-Based Access Control (ABAC) as middleware for RAG pipelines.
+  It enforces zero-trust, fail-closed access control by performing a
+  real-time Permission Handshake between the LLM and the knowledge base,
+  inspired by the ReBAC principles of Google's Zanzibar system.
+date-released: "2026-03-22"
+version: "0.1.0"
+license: "Elastic-2.0"
+url: "https://github.com/aashishravindran/Sentinel"
+keywords:
+  - RAG
+  - access control
+  - ABAC
+  - MCP
+  - LLM security
+  - ReBAC
+  - Bedrock
+  - DynamoDB
+references:
+  - type: article
+    authors:
+      - family-names: "Pang"
+        given-names: "Ruoming"
+    title: "Zanzibar: Google's Consistent, Global Authorization System"
+    year: 2019
+    conference:
+      name: "USENIX Annual Technical Conference (ATC)"
+    url: "https://www.usenix.org/system/files/atc19-pang.pdf"
