@@ -139,6 +139,8 @@ python scripts/init_db.py
 python scripts/ingest_seed_docs.py
 ```
 
+Replace `/absolute/path/to/Sentinel` with the path to your cloned repo (e.g. `/Users/yourname/Projects/Sentinel`). The `cwd` field is required — MCP clients launch the server from their own working directory, not yours.
+
 ```json
 {
   "mcpServers": {
@@ -146,11 +148,12 @@ python scripts/ingest_seed_docs.py
       "type": "stdio",
       "command": "uv",
       "args": ["run", "python", "-m", "sentinel.main"],
+      "cwd": "/absolute/path/to/Sentinel",
       "env": {
         "SENTINEL_IDENTITY_STORE": "sqlite",
-        "SQLITE_DB_PATH": "/path/to/data/permissions.db",
+        "SQLITE_DB_PATH": "/absolute/path/to/Sentinel/data/permissions.db",
         "SENTINEL_KNOWLEDGE_STORE": "chroma",
-        "CHROMA_PATH": "/path/to/data/chroma",
+        "CHROMA_PATH": "/absolute/path/to/Sentinel/data/chroma",
         "CHROMA_COLLECTION": "sentinel",
         "EMBEDDING_MODEL": "all-MiniLM-L6-v2"
       }
@@ -168,6 +171,7 @@ python scripts/ingest_seed_docs.py
       "type": "stdio",
       "command": "uv",
       "args": ["run", "python", "-m", "sentinel.main"],
+      "cwd": "/absolute/path/to/Sentinel",
       "env": {
         "SENTINEL_IDENTITY_STORE": "dynamodb",
         "SENTINEL_KNOWLEDGE_STORE": "bedrock",

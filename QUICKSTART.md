@@ -21,7 +21,9 @@ python scripts/ingest_seed_docs.py
 
 ### 3. Configure your MCP client
 
-Add this to your MCP client configuration (Claude Desktop `claude_desktop_config.json`, Cursor `.cursor/mcp.json`, etc.):
+Add this to your MCP client configuration (Claude Desktop `claude_desktop_config.json`, Cursor `.cursor/mcp.json`, etc.).
+
+Replace `/absolute/path/to/Sentinel` with the actual path to your cloned Sentinel directory (e.g. `/Users/yourname/Projects/Sentinel`).
 
 ```json
 {
@@ -30,11 +32,12 @@ Add this to your MCP client configuration (Claude Desktop `claude_desktop_config
       "type": "stdio",
       "command": "uv",
       "args": ["run", "python", "-m", "sentinel.main"],
+      "cwd": "/absolute/path/to/Sentinel",
       "env": {
         "SENTINEL_IDENTITY_STORE": "sqlite",
-        "SQLITE_DB_PATH": "/absolute/path/to/data/permissions.db",
+        "SQLITE_DB_PATH": "/absolute/path/to/Sentinel/data/permissions.db",
         "SENTINEL_KNOWLEDGE_STORE": "chroma",
-        "CHROMA_PATH": "/absolute/path/to/data/chroma",
+        "CHROMA_PATH": "/absolute/path/to/Sentinel/data/chroma",
         "CHROMA_COLLECTION": "sentinel",
         "EMBEDDING_MODEL": "all-MiniLM-L6-v2",
         "MIN_RELEVANCE_SCORE": "0.25"
@@ -44,7 +47,7 @@ Add this to your MCP client configuration (Claude Desktop `claude_desktop_config
 }
 ```
 
-Replace `/absolute/path/to/` with the actual path to your Sentinel project directory.
+> **Why `cwd`?** MCP clients launch the server process from their own working directory, not yours. Setting `cwd` to the Sentinel repo root ensures `uv` picks up the correct `pyproject.toml` and the `sentinel` module is on the path.
 
 ### 4. Test it
 
@@ -84,6 +87,8 @@ The setup script prints environment variable values at the end. Copy `BEDROCK_KB
 
 The env block supports three authentication methods:
 
+Replace `/absolute/path/to/Sentinel` with the path to your cloned repo in all blocks below.
+
 **Option A: AWS named profile (recommended for local development)**
 ```json
 {
@@ -92,6 +97,7 @@ The env block supports three authentication methods:
       "type": "stdio",
       "command": "uv",
       "args": ["run", "python", "-m", "sentinel.main"],
+      "cwd": "/absolute/path/to/Sentinel",
       "env": {
         "SENTINEL_IDENTITY_STORE": "dynamodb",
         "SENTINEL_KNOWLEDGE_STORE": "bedrock",
@@ -123,6 +129,7 @@ The env block supports three authentication methods:
       "type": "stdio",
       "command": "uv",
       "args": ["run", "python", "-m", "sentinel.main"],
+      "cwd": "/absolute/path/to/Sentinel",
       "env": {
         "SENTINEL_IDENTITY_STORE": "dynamodb",
         "SENTINEL_KNOWLEDGE_STORE": "bedrock",
@@ -158,6 +165,7 @@ Omit all AWS auth variables — the SDK resolves credentials from the instance m
       "type": "stdio",
       "command": "uv",
       "args": ["run", "python", "-m", "sentinel.main"],
+      "cwd": "/absolute/path/to/Sentinel",
       "env": {
         "SENTINEL_IDENTITY_STORE": "dynamodb",
         "SENTINEL_KNOWLEDGE_STORE": "bedrock",
