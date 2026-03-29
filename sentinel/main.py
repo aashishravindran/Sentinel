@@ -45,6 +45,18 @@ def _build_engine() -> SentinelEngine:
             permission=permission,
             user_type=user_type,
         )
+    elif identity_store == "iam":
+        from sentinel.connectors.identity.iam import IAMIdentityConnector
+        region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+        principal_type = os.environ.get("IAM_PRINCIPAL_TYPE", "user")
+        tag_format = os.environ.get("IAM_TAG_FORMAT", "key:value")
+        tag_key_prefix = os.environ.get("IAM_TAG_KEY_PREFIX", "")
+        identity = IAMIdentityConnector(
+            region,
+            principal_type=principal_type,
+            tag_format=tag_format,
+            tag_key_prefix=tag_key_prefix,
+        )
     else:
         raise ValueError(f"Unsupported identity store: '{identity_store}'")
 
@@ -288,6 +300,9 @@ async def check_config(ctx: Context) -> str:
         "SPICEDB_RESOURCE_TYPE": os.environ.get("SPICEDB_RESOURCE_TYPE", "NOT_SET"),
         "SPICEDB_PERMISSION": os.environ.get("SPICEDB_PERMISSION", "NOT_SET"),
         "SPICEDB_USER_TYPE": os.environ.get("SPICEDB_USER_TYPE", "NOT_SET"),
+        "IAM_PRINCIPAL_TYPE": os.environ.get("IAM_PRINCIPAL_TYPE", "NOT_SET"),
+        "IAM_TAG_FORMAT": os.environ.get("IAM_TAG_FORMAT", "NOT_SET"),
+        "IAM_TAG_KEY_PREFIX": os.environ.get("IAM_TAG_KEY_PREFIX", "NOT_SET"),
         "MIN_RELEVANCE_SCORE": os.environ.get("MIN_RELEVANCE_SCORE", "NOT_SET"),
     }
     await ctx.info("check_config called")

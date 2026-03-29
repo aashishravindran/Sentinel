@@ -26,14 +26,15 @@
       "args": ["run", "python", "-m", "sentinel.main"],
       "cwd": "/Users/raashish/Documents/Sentinel",
       "env": {
-        "SENTINEL_IDENTITY_STORE": "dynamodb",
+        "SENTINEL_IDENTITY_STORE": "iam",
         "SENTINEL_KNOWLEDGE_STORE": "bedrock",
 
         "AWS_REGION": "us-east-1",
         "AWS_DEFAULT_REGION": "us-east-1",
         "AWS_PROFILE": "default",
 
-        "DDB_TABLE_NAME": "sentinel-identity",
+        "IAM_PRINCIPAL_TYPE": "user",
+        "IAM_TAG_FORMAT": "value",
 
         "BEDROCK_KB_ID": "QA9LVE2MIC",
         "BEDROCK_S3_BUCKET": "sentinel-kb-docs",

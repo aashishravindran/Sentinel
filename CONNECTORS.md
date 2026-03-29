@@ -103,6 +103,67 @@ aws dynamodb put-item \
 
 ---
 
+### IAM (`iam`)
+
+AWS-native identity connector that reads tags directly from IAM users or roles — no separate identity table required. Each AWS tag is mapped to a Sentinel permission tag; the format is controlled by `IAM_TAG_FORMAT`.
+
+**Install:** included in base install (uses `aioboto3`).
+
+**Tag format options:**
+
+| `IAM_TAG_FORMAT` | IAM tag | Sentinel tag | Document `access_tags` |
+|---|---|---|---|
+| `value` (default) | `Project = finance` | `finance` | `["finance"]` |
+| `key` | `Project = finance` | `Project` | `["Project"]` |
+| `key:value` | `Project = finance` | `Project:finance` | `["Project:finance"]` |
+
+Choose `value` for short, readable tags when key collisions aren't a concern. Choose `key:value` for full qualification — `Project:finance` will never match a user with `Team = finance`.
+
+**Tag your IAM principals:**
+```bash
+aws iam tag-user --user-name alice \
+  --tags Key=Project,Value=finance Key=Team,Value=platform
+
+aws iam tag-role --role-name data-analyst \
+  --tags Key=Project,Value=finance
+```
+
+**Optional prefix scoping** — set `IAM_TAG_KEY_PREFIX` to restrict which tags are used and strip the prefix before formatting:
+
+```bash
+# Tag the principal
+aws iam tag-user --user-name alice --tags Key=Sentinel/Project,Value=finance
+
+# Config
+IAM_TAG_KEY_PREFIX=Sentinel/
+IAM_TAG_FORMAT=value
+# → Sentinel tag: "finance"  (prefix stripped)
+```
+
+**Environment variables:**
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `SENTINEL_IDENTITY_STORE` | ✅ | — | Must be `iam` |
+| `IAM_PRINCIPAL_TYPE` | — | `user` | `user` (calls `list_user_tags`) or `role` (calls `list_role_tags`) |
+| `IAM_TAG_FORMAT` | — | `value` | `value`, `key`, or `key:value` |
+| `IAM_TAG_KEY_PREFIX` | — | `""` | Only include tags whose key starts with this prefix; strip it before formatting |
+| `AWS_REGION` | — | `us-east-1` | AWS region |
+| `AWS_PROFILE` | — | `default` | AWS credentials profile |
+
+**MCP config snippet:**
+```json
+"env": {
+  "SENTINEL_IDENTITY_STORE": "iam",
+  "IAM_PRINCIPAL_TYPE": "user",
+  "IAM_TAG_FORMAT": "value",
+  "AWS_REGION": "us-east-1",
+  "AWS_PROFILE": "your-profile"
+}
+```
+
+---
+
 ### SpiceDB (`spicedb`)
 
 [ReBAC](https://zanzibar.academy) identity connector backed by [SpiceDB](https://github.com/authzed/spicedb) — the open-source implementation of Google's Zanzibar model. Resolves user permissions via `LookupResources`, enabling deep relationship hierarchies (e.g. *user → team → project*) in addition to flat tag lists.
@@ -275,8 +336,10 @@ python scripts/setup_aws.py
 |---|---|---|
 | `sqlite` | `chroma` | Local development, CI, unit testing |
 | `spicedb` | `chroma` | Local dev with relationship-based access control |
-| `dynamodb` | `bedrock` | AWS production deployment |
+| `dynamodb` | `bedrock` | AWS production — explicit identity table |
+| `iam` | `bedrock` | AWS production — zero-ops identity via IAM tags |
 | `spicedb` | `bedrock` | AWS production with ReBAC identity |
+| `iam` | `chroma` | Mixed: IAM identity, self-hosted knowledge |
 | `sqlite` | `bedrock` | Mixed: simple identity, cloud knowledge |
 | `dynamodb` | `chroma` | Mixed: cloud identity, self-hosted knowledge |
 

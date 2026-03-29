@@ -208,6 +208,192 @@ python scripts/setup_aws.py --stack sentinel --region us-east-1 --destroy
 
 ---
 
+## AWS (IAM Tags + Bedrock Knowledge Bases)
+
+Use this configuration when you want to derive user permissions directly from IAM user or role tags — no separate identity table (DynamoDB) required. The IAM connector reads tags from the principal making the request and maps them to Sentinel access tags.
+
+**`IAM_TAG_FORMAT` — choosing what part of the IAM tag becomes the Sentinel tag:**
+
+| Format | IAM tag | Sentinel tag | Document `access_tags` |
+|---|---|---|---|
+| `value` (simplest) | `Project = finance` | `finance` | `["finance"]` |
+| `key` | `Project = finance` | `Project` | `["Project"]` |
+| `key:value` (most precise) | `Project = finance` | `Project:finance` | `["Project:finance"]` |
+
+- **`value`** — shortest tags, easiest to read, but collisions are possible if two different keys share the same value (e.g. `Team = 4` and `ClearanceLevel = 4` both become `4`).
+- **`key`** — useful when the key itself is the permission group and values are irrelevant (e.g. a tag `finance = true` grants the `finance` permission).
+- **`key:value`** — fully qualified, no collisions. Recommended when IAM tags mix many different key namespaces.
+
+### 1. Tag your IAM principals
+
+Attach tags to IAM users or roles that correspond to document access groups:
+
+```
+Project   = finance
+Team      = platform
+ClearanceLevel = 3
+```
+
+To scope which tags Sentinel sees, set `IAM_TAG_KEY_PREFIX` (e.g. `Sentinel/`) so only tags prefixed with `Sentinel/` are used, with the prefix stripped before matching.
+
+### 2. Provision Bedrock infrastructure
+
+```bash
+python scripts/setup_aws.py --stack sentinel --region us-east-1
+```
+
+The setup script prints `BEDROCK_KB_ID`, `BEDROCK_S3_BUCKET`, and `BEDROCK_DS_ID`. Copy those for the next step. You do **not** need to seed a DynamoDB identity table.
+
+### 3. Configure your MCP client
+
+**Option A: AWS named profile (recommended for local development)**
+```json
+{
+  "mcpServers": {
+    "sentinel-rag": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "-m", "sentinel.main"],
+      "cwd": "/absolute/path/to/Sentinel",
+      "env": {
+        "SENTINEL_IDENTITY_STORE": "iam",
+        "SENTINEL_KNOWLEDGE_STORE": "bedrock",
+
+        "AWS_REGION": "us-east-1",
+        "AWS_PROFILE": "your-profile-name",
+
+        "IAM_PRINCIPAL_TYPE": "user",
+        "IAM_TAG_FORMAT": "value",
+
+        "BEDROCK_KB_ID": "<from setup_aws.py output>",
+        "BEDROCK_S3_BUCKET": "<from setup_aws.py output>",
+        "BEDROCK_S3_PREFIX": "documents/",
+        "BEDROCK_DS_ID": "<from setup_aws.py output>",
+
+        "BEDROCK_SEARCH_TYPE": "HYBRID",
+        "BEDROCK_RERANKING": "false",
+        "MIN_RELEVANCE_SCORE": "0.25"
+      }
+    }
+  }
+}
+```
+
+**Option B: Static access keys (CI, Docker)**
+```json
+{
+  "mcpServers": {
+    "sentinel-rag": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "-m", "sentinel.main"],
+      "cwd": "/absolute/path/to/Sentinel",
+      "env": {
+        "SENTINEL_IDENTITY_STORE": "iam",
+        "SENTINEL_KNOWLEDGE_STORE": "bedrock",
+
+        "AWS_REGION": "us-east-1",
+        "AWS_ACCESS_KEY_ID": "AKIA...",
+        "AWS_SECRET_ACCESS_KEY": "...",
+
+        "IAM_PRINCIPAL_TYPE": "user",
+        "IAM_TAG_FORMAT": "value",
+
+        "BEDROCK_KB_ID": "<from setup_aws.py output>",
+        "BEDROCK_S3_BUCKET": "<from setup_aws.py output>",
+        "BEDROCK_S3_PREFIX": "documents/",
+        "BEDROCK_DS_ID": "<from setup_aws.py output>",
+
+        "BEDROCK_SEARCH_TYPE": "HYBRID",
+        "BEDROCK_RERANKING": "false",
+        "MIN_RELEVANCE_SCORE": "0.25"
+      }
+    }
+  }
+}
+```
+
+**Option C: Instance/task role (EC2, ECS, Lambda)**
+
+Set `IAM_PRINCIPAL_TYPE=role` and pass the role name as `user_id` in `secure_search`. Omit all static AWS auth variables.
+
+```json
+{
+  "mcpServers": {
+    "sentinel-rag": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "-m", "sentinel.main"],
+      "cwd": "/absolute/path/to/Sentinel",
+      "env": {
+        "SENTINEL_IDENTITY_STORE": "iam",
+        "SENTINEL_KNOWLEDGE_STORE": "bedrock",
+
+        "AWS_REGION": "us-east-1",
+
+        "IAM_PRINCIPAL_TYPE": "role",
+        "IAM_TAG_FORMAT": "value",
+
+        "BEDROCK_KB_ID": "<from setup_aws.py output>",
+        "BEDROCK_S3_BUCKET": "<from setup_aws.py output>",
+        "BEDROCK_S3_PREFIX": "documents/",
+        "BEDROCK_DS_ID": "<from setup_aws.py output>",
+
+        "BEDROCK_SEARCH_TYPE": "HYBRID",
+        "BEDROCK_RERANKING": "false",
+        "MIN_RELEVANCE_SCORE": "0.25"
+      }
+    }
+  }
+}
+```
+
+### 4. Optional: scope tags with a prefix
+
+To avoid clashing with non-Sentinel IAM tags, use a dedicated key prefix:
+
+```json
+"IAM_TAG_KEY_PREFIX": "Sentinel/",
+"IAM_TAG_FORMAT": "value"
+```
+
+Then tag your principals as `Sentinel/Project = finance` — only keys starting with `Sentinel/` are included, and the prefix is stripped before matching, so documents still use `access_tags=["finance"]`.
+
+### 5. Ingest documents with matching tags
+
+`access_tags` on a document must use the **same format** you configured in `IAM_TAG_FORMAT`. The three formats map like this:
+
+**`IAM_TAG_FORMAT=value`**
+
+IAM principal tagged `Project = finance`:
+```
+ingest_document(text=..., access_tags=["finance"], doc_id="q4-report")
+```
+
+**`IAM_TAG_FORMAT=key`**
+
+IAM principal tagged `finance = true` (key carries the meaning):
+```
+ingest_document(text=..., access_tags=["finance"], doc_id="q4-report")
+```
+
+**`IAM_TAG_FORMAT=key:value`**
+
+IAM principal tagged `Project = finance`:
+```
+ingest_document(text=..., access_tags=["Project:finance"], doc_id="q4-report")
+```
+
+Use `key:value` when multiple keys could produce the same value and you need to avoid false matches. A document tagged `["Project:finance"]` will **not** match a user who has `Team = finance` formatted as `key:value` (`Team:finance`), even though the value is the same.
+
+### 6. Tear down
+
+```bash
+python scripts/setup_aws.py --stack sentinel --region us-east-1 --destroy
+```
+
+---
+
 ## MCP Tools
 
 Once configured, your MCP client exposes three tools:
