@@ -101,6 +101,7 @@ These connectors are production-ready and can be used for local development or A
 | :--- | :--- | :--- |
 | **Identity** | `SQLiteConnector` | Local-first identity store for development, prototyping, and CI/CD testing. |
 | **Identity** | `DynamoDBConnector` | High-performance AWS integration using **GSIs** for sub-10ms attribute-based lookups. |
+| **Identity** | `IAMConnector` | **Zero-ops AWS identity** — derives permissions directly from IAM user/role tags. Supports `value`, `key`, and `key:value` tag formats with optional prefix scoping. No identity table required. |
 | **Identity** | `SpiceDBConnector` | **Relationship-Based (ReBAC)** connector backed by [SpiceDB](https://github.com/authzed/spicedb). Resolves deep permission hierarchies via Zanzibar-style `LookupResources`. |
 | **Knowledge** | `ChromaConnector` | Open-source vector database for local-first or self-hosted Agentic workflows. |
 | **Knowledge** | `BedrockConnector` | Native integration for teams leveraging **Knowledge Bases for Amazon Bedrock**. |
