@@ -24,7 +24,7 @@ The moment a document enters the LLM's context window, the security boundary is 
 
 Sentinel moves the security boundary **outside the model**. It sits between the AI and the data, performing a real-time **Permission Handshake** before a single byte of data is retrieved.
 
-```
+```mermaid
 sequenceDiagram
     participant AI as Claude / Cursor
     participant S as Sentinel MCP
@@ -52,7 +52,7 @@ sequenceDiagram
 
 - **Protocol Native** — Built on the [Model Context Protocol (MCP)](https://modelcontextprotocol.io) for instant integration with Claude Desktop, Cursor, and any MCP-compatible IDE.
 - **Plug-and-Play Connectors** — AWS DynamoDB (identity) and Amazon Bedrock Knowledge Bases (knowledge), with SQLite + ChromaDB for local development.
-- **Enterprise-Grade RAG** — Hybrid search (BM25 + semantic vector) and optional cross-encoder reranking out of the box. Currently only on AWS Bedrock Connector
+- **Enterprise-Grade RAG** — Hybrid search (BM25 + semantic vector) and optional cross-encoder reranking via the AWS Bedrock connector.
 - **Domain Agnostic** — Designed for Healthcare, Legal, and Finance. Leave the domain expertise to the data; leave the security to Sentinel.
 
 ---
@@ -90,11 +90,11 @@ secure_search(query, user_id)
 | **Environment-Driven** | All secrets injected via `mcp.json` — nothing hardcoded |
 
 ---
-## 🔌 Ecosystem & Roadmap
+## Ecosystem & Roadmap
 
-Sentinel is designed to be a plug-and-play security layer for any RAG stack. By decoupling the **Identity Provider** from the **Knowledge Base**, Sentinel ensures your security logic remains stateless, portable, and planet-scale.
+Sentinel is designed to be a plug-and-play security layer for any RAG stack. By decoupling the **Identity Provider** from the **Knowledge Base**, Sentinel ensures your security logic remains stateless and portable.
 
-### 🟢 Currently Available
+### Currently Available
 These connectors are production-ready and can be used for local development or AWS-native deployments.
 
 | Category | Connector | Description |
@@ -110,7 +110,7 @@ See [CONNECTORS.md](CONNECTORS.md) for full setup instructions for every connect
 
 ---
 
-### 🟡 Coming Soon
+### Coming Soon
 We are actively expanding the ecosystem to support industry-standard managed services and complex relationship graphs.
 
 #### **Identity Connectors**
@@ -122,15 +122,14 @@ We are actively expanding the ecosystem to support industry-standard managed ser
 
 ---
 
-### 🛡️ The Sentinel Promise: Zero-Data Persistence
+### The Sentinel Promise: Zero-Data Persistence
 Regardless of the connector used, Sentinel follows a strict **"Fetch, Filter, Flush"** lifecycle:
 1. **Fetch:** Retrieve user attributes or group memberships from the `IdentityConnector`.
 2. **Filter:** Synthesize a Boolean metadata tree (AND/OR/NOT).
 3. **Retrieve:** Execute a secured, filtered query via the `KnowledgeConnector`.
 4. **Flush:** Drop the context. Sentinel stores no user data, ensuring a truly stateless security boundary.
 
-
-
+---
 
 ## Quick Start
 
@@ -241,7 +240,7 @@ class MyCustomVectorStore(KnowledgeConnector):
         await self.client.upsert(id=doc_id, vector=self.embed(text), metadata=metadata)
 ```
 
-### 🔌 Wiring It Up
+### Wiring It Up
 
 Once your classes are ready, register them in `sentinel/main.py`:
 
@@ -285,6 +284,7 @@ sentinel/
     ├── identity/
     │   ├── sqlite.py               # SQLite (local dev)
     │   ├── ddb.py                  # DynamoDB (production)
+    │   ├── iam.py                  # IAM tag-based (zero-ops AWS)
     │   └── spicedb.py              # SpiceDB ReBAC (local + production)
     └── knowledge/
         ├── chroma.py               # ChromaDB (local dev)
