@@ -2,138 +2,237 @@
 
 [![License: EL2](https://img.shields.io/badge/License-Elastic_2.0-blue.svg)](LICENSE)
 
-> **Compliance-as-Code for AI.** Sentinel is a security middleware layer that enforces per-user access control on RAG pipelines — so your LLM only ever sees what it's allowed to know.
+> **Stateless authorization for RAG and agentic systems.**
+> Sentinel enforces access control **before retrieval**, so models and agents only see data a user is actually allowed to access.
 
 > **License:** Sentinel is licensed under the [Elastic License 2.0](LICENSE). You may self-host and modify it freely. You may **not** offer it as a hosted or managed service to third parties.
 
 ---
 
-## The Problem: The "RAG Leak"
+## Why Sentinel Exists
 
-Current RAG implementations suffer from a critical security gap: **the LLM has no concept of Row-Level Security (RLS).**
+Most RAG systems are optimized for relevance first.
 
-- **Stateless Models** — LLMs don't know who is asking the question unless you hardcode it.
-- **Metadata Drift** — Syncing user permissions into vector database metadata is a synchronisation nightmare.
-- **The Hallucination Risk** — You cannot "prompt-engineer" an AI to ignore private data it has already retrieved.
+The problem is that retrieval is often **identity-blind**.
 
-The moment a document enters the LLM's context window, the security boundary is gone.
+A user asks a question, the system runs semantic search, and relevant chunks are sent to the model. If one of those chunks is sensitive and the model has already seen it, prompt-level guardrails are too late. The security failure happened at retrieval time, not generation time.
+
+Sentinel exists to move authorization **out of the prompt** and **into the retrieval path**.
+
+Instead of trusting the model to ignore private data, Sentinel verifies access at query time and constrains what can be retrieved in the first place.
 
 ---
 
-## The Solution: Sentinel Middleware
+## What Sentinel Is
 
-Sentinel moves the security boundary **outside the model**. It sits between the AI and the data, performing a real-time **Permission Handshake** before a single byte of data is retrieved.
+Sentinel is a **stateless authorization layer** for RAG and agentic systems.
+
+It sits between:
+
+- an **identity source of truth**
+  (for example DynamoDB, SQLite, IAM, or SpiceDB)
+
+and
+
+- a **knowledge system**
+  (for example Bedrock Knowledge Bases or ChromaDB)
+
+At query time, Sentinel:
+
+1. resolves the caller's access scope from the identity system
+2. translates that scope into backend-native retrieval filters
+3. executes a constrained search against the knowledge system
+4. returns only authorized results to the model or agent
+
+This means the model never gets the chance to "accidentally" summarize a document the caller should not have been able to retrieve.
+
+---
+
+## What Makes It Different
+
+### 1. Authorization happens before retrieval
+
+Sentinel does not rely on prompt instructions or post-hoc filtering after sensitive data has already entered the context window.
+
+### 2. Stateless by design
+
+Sentinel does not become a new source of truth for permissions. It fetches access scope at runtime, applies enforcement, and drops the context.
+
+### 3. Works with existing systems
+
+You keep identities where they already live. You keep your vector/database stack. Sentinel connects the two and handles retrieval-time enforcement.
+
+### 4. Built for modern AI workflows
+
+Sentinel is MCP-native, connector-driven, and designed for RAG, internal copilots, and agentic systems that need real access boundaries.
+
+---
+
+## Architecture
 
 ```mermaid
 sequenceDiagram
-    participant AI as Claude / Cursor
+    participant AI as Claude / Cursor / Agent
     participant S as Sentinel MCP
-    participant IV as Identity Vault (DDB / SQLite)
-    participant KB as Knowledge Base (Bedrock / Chroma)
+    participant I as Identity Source (DDB / SQLite / IAM / SpiceDB)
+    participant K as Knowledge Store (Bedrock / Chroma)
 
     AI->>S: secure_search(query, user_id)
-    S->>IV: get_tags(user_id)
-    IV-->>S: ["finance", "public"]
-    S->>S: Synthesize metadata filter
-    S->>KB: Filtered vector search (tags: finance OR public)
-    KB-->>S: Authorised chunks only
-    S-->>AI: Redacted context
+    S->>I: resolve access scope(user_id)
+    I-->>S: ["finance", "public"]
+    S->>S: synthesize backend-native filter
+    S->>K: filtered retrieval(query, access_scope)
+    K-->>S: authorized chunks only
+    S-->>AI: safe context
 ```
 
-**1. Unified Identity Vault** — Connect to your existing DynamoDB or SQLite permission tables. Sentinel fetches a user's Access Tags at the moment of the query.
+### Core Model
 
-**2. Stateless Logic** — Sentinel holds no data. It translates high-level user identities into database-specific metadata filters (AWS Bedrock, ChromaDB, Pinecone) on the fly.
+Sentinel is built around a simple model:
 
-**3. Fail-Closed Security** — If the Identity Vault doesn't explicitly grant a tag, Sentinel returns an empty result set. The AI never sees what it isn't allowed to know.
+- **Identity connectors** resolve who the user is allowed to access
+- **Knowledge connectors** perform filtered retrieval against the target backend
+- **The engine** orchestrates fail-closed enforcement between the two
+
+This design keeps security logic portable across different identity providers and retrieval backends.
 
 ---
 
-## Key Features
+## Security Principles
 
-- **Protocol Native** — Built on the [Model Context Protocol (MCP)](https://modelcontextprotocol.io) for instant integration with Claude Desktop, Cursor, and any MCP-compatible IDE.
-- **Plug-and-Play Connectors** — AWS DynamoDB (identity) and Amazon Bedrock Knowledge Bases (knowledge), with SQLite + ChromaDB for local development.
-- **Enterprise-Grade RAG** — Hybrid search (BM25 + semantic vector) and optional cross-encoder reranking via the AWS Bedrock connector.
-- **Domain Agnostic** — Designed for Healthcare, Legal, and Finance. Leave the domain expertise to the data; leave the security to Sentinel.
+| Principle | Behavior |
+| :--- | :--- |
+| **Zero Trust** | Never assumes a `user_id` has global access |
+| **Fail-Closed** | No access scope = no retrieval |
+| **Stateless** | No user data cached between MCP sessions |
+| **Retrieval-Time Enforcement** | Access is checked before context is assembled |
+| **Portable Enforcement** | Identity source and knowledge store remain decoupled |
+| **Environment-Driven** | Runtime config is injected via `mcp.json` / environment variables |
 
 ---
 
 ## How It Works
 
 ```
-Client (Claude Desktop / Cursor)
-    │
-    ▼
+Client (Claude Desktop / Cursor / Agent)
+    |
+    v
 secure_search(query, user_id)
-    │
-    ├─► Identity Store (DynamoDB / SQLite)
-    │       └── get_tags(user_id) → {"finance", "project_x"}
-    │
-    │   [Fail-Closed: if tags = ∅ → deny, no KB call made]
-    │
-    ├─► Query Synthesis
-    │       └── tags → DB-native metadata filter
-    │
-    ├─► Knowledge Store (Bedrock / ChromaDB)
-    │       └── filtered hybrid search → authorised chunks
-    │
-    └─► Formatted context returned to LLM
+    |
+    +---> Identity Store (DynamoDB / SQLite / IAM / SpiceDB)
+    |        resolve access scope(user_id)
+    |
+    |     [Fail-Closed: if scope = {} -> deny, no KB call]
+    |
+    +---> Query Synthesis
+    |        access scope -> backend-native metadata filter
+    |
+    +---> Knowledge Store (Bedrock / ChromaDB / future backends)
+    |        filtered retrieval -> authorized chunks only
+    |
+    +---> Safe context returned to model / agent
 ```
 
-### Security Principles
+---
 
-| Principle | Behaviour |
-|---|---|
-| **Zero Trust** | Never assumes a `user_id` has global access |
-| **Fail-Closed** | No tags = access denied before any KB call is made |
-| **Stateless** | No user data cached between MCP sessions |
-| **OR Policy** | Document returned if user holds ≥1 matching tag |
-| **Environment-Driven** | All secrets injected via `mcp.json` — nothing hardcoded |
+## Supported Capabilities
+
+### Protocol-native integration
+
+Built on the [Model Context Protocol (MCP)](https://modelcontextprotocol.io) for integration with Claude Desktop, Cursor, and other MCP-compatible clients.
+
+### Identity connectors
+
+Sentinel can resolve access scope from:
+
+- **`SQLiteConnector`** — local-first identity store for development and CI
+- **`DynamoDBConnector`** — AWS-native identity lookup
+- **`IAMConnector`** — derives access directly from IAM user/role tags
+- **`SpiceDBConnector`** — ReBAC-style access resolution backed by [SpiceDB](https://github.com/authzed/spicedb)
+
+### Knowledge connectors
+
+Sentinel can enforce filtered retrieval over:
+
+- **`ChromaConnector`** — local/self-hosted development workflows
+- **`BedrockConnector`** — Amazon Bedrock Knowledge Bases
+
+### Retrieval quality features
+
+Sentinel preserves the retrieval features already present in the stack:
+
+- hybrid search (BM25 + vector) where supported
+- optional reranking via the Bedrock connector
+- backend-native metadata filtering
+- document ingestion with mandatory access tags
+
+### Extensible connector model
+
+You can add your own identity provider or knowledge backend by implementing the core connector interfaces.
+
+See [CONNECTORS.md](CONNECTORS.md) for connector-specific setup.
 
 ---
-## Ecosystem & Roadmap
 
-Sentinel is designed to be a plug-and-play security layer for any RAG stack. By decoupling the **Identity Provider** from the **Knowledge Base**, Sentinel ensures your security logic remains stateless and portable.
+## When to Use Sentinel
 
-### Currently Available
-These connectors are production-ready and can be used for local development or AWS-native deployments.
+Sentinel is useful when you have:
+
+- internal RAG over sensitive documents
+- enterprise copilots that should respect user permissions
+- agentic systems that retrieve or reason over scoped data
+- a need to enforce access without duplicating permissions into a new security silo
+- an existing identity source that should remain the source of truth
+
+### When Sentinel Is a Strong Fit
+
+Sentinel is especially useful if your system already has:
+
+- a source of truth for user permissions
+- document or chunk metadata that can represent access tags or scope
+- a retrieval backend that supports metadata-aware filtering
+- a need for enforcement that is explicit, auditable, and fail-closed
+
+---
+
+## Connector Ecosystem
+
+### Available now
 
 | Category | Connector | Description |
 | :--- | :--- | :--- |
-| **Identity** | `SQLiteConnector` | Local-first identity store for development, prototyping, and CI/CD testing. |
-| **Identity** | `DynamoDBConnector` | High-performance AWS integration using **GSIs** for sub-10ms attribute-based lookups. |
-| **Identity** | `IAMConnector` | **Zero-ops AWS identity** — derives permissions directly from IAM user/role tags. Supports `value`, `key`, and `key:value` tag formats with optional prefix scoping. No identity table required. |
-| **Identity** | `SpiceDBConnector` | **Relationship-Based (ReBAC)** connector backed by [SpiceDB](https://github.com/authzed/spicedb). Resolves deep permission hierarchies via Zanzibar-style `LookupResources`. |
-| **Knowledge** | `ChromaConnector` | Open-source vector database for local-first or self-hosted Agentic workflows. |
-| **Knowledge** | `BedrockConnector` | Native integration for teams leveraging **Knowledge Bases for Amazon Bedrock**. |
+| **Identity** | `SQLiteConnector` | Local-first identity store for development, prototyping, and testing |
+| **Identity** | `DynamoDBConnector` | AWS integration using indexed lookups for low-latency attribute-based access |
+| **Identity** | `IAMConnector` | Zero-ops AWS identity using IAM user/role tags |
+| **Identity** | `SpiceDBConnector` | ReBAC connector using SpiceDB relationship lookups |
+| **Knowledge** | `ChromaConnector` | Open-source vector DB for local-first workflows |
+| **Knowledge** | `BedrockConnector` | Native integration with Amazon Bedrock Knowledge Bases |
 
-See [CONNECTORS.md](CONNECTORS.md) for full setup instructions for every connector.
+### Planned / roadmap
 
----
-
-### Coming Soon
-We are actively expanding the ecosystem to support industry-standard managed services and complex relationship graphs.
-
-#### **Identity Connectors**
-* **Okta/Auth0:** Native OIDC integration to map enterprise JWT claims directly to vector metadata filters.
-
-#### **Knowledge Connectors**
-* **Pinecone Serverless:** Direct integration with Pinecone’s high-performance metadata filtering engine. This enables security enforcement at the index level for millions of documents with sub-50ms latency.
-* **Elasticsearch/OpenSearch:** Support for hybrid search (BM25 + Vector) with native DLS (Document Level Security) mapping.
+- Okta / Auth0
+- Pinecone
+- Elasticsearch / OpenSearch
+- Additional enterprise identity and retrieval backends
 
 ---
 
-### The Sentinel Promise: Zero-Data Persistence
-Regardless of the connector used, Sentinel follows a strict **"Fetch, Filter, Flush"** lifecycle:
-1. **Fetch:** Retrieve user attributes or group memberships from the `IdentityConnector`.
-2. **Filter:** Synthesize a Boolean metadata tree (AND/OR/NOT).
-3. **Retrieve:** Execute a secured, filtered query via the `KnowledgeConnector`.
-4. **Flush:** Drop the context. Sentinel stores no user data, ensuring a truly stateless security boundary.
+## The Sentinel Lifecycle
+
+Regardless of connector, Sentinel follows the same pattern:
+
+1. **Fetch** — resolve access scope from the identity connector
+2. **Synthesize** — build backend-native authorization filters
+3. **Retrieve** — execute a constrained query against the knowledge connector
+4. **Flush** — return results and persist no user-specific state
+
+This is the core promise of Sentinel: **fetch, enforce, forget.**
 
 ---
 
 ## Quick Start
 
-### Local (SQLite + ChromaDB)
+### Local development (SQLite + ChromaDB)
 
 ```bash
 uv sync
@@ -141,7 +240,7 @@ python scripts/init_db.py
 python scripts/ingest_seed_docs.py
 ```
 
-Replace `/absolute/path/to/Sentinel` with the path to your cloned repo (e.g. `/Users/yourname/Projects/Sentinel`). The `cwd` field is required — MCP clients launch the server from their own working directory, not yours.
+Example MCP config:
 
 ```json
 {
@@ -164,7 +263,7 @@ Replace `/absolute/path/to/Sentinel` with the path to your cloned repo (e.g. `/U
 }
 ```
 
-### AWS (DynamoDB + Bedrock)
+### AWS deployment (DynamoDB + Bedrock)
 
 ```json
 {
@@ -190,85 +289,94 @@ Replace `/absolute/path/to/Sentinel` with the path to your cloned repo (e.g. `/U
 }
 ```
 
-See [QUICKSTART.md](QUICKSTART.md) for full setup instructions, all three AWS auth options, and reranking configuration.
-
----
-
-## Extending Sentinel: Custom Connectors
-
-Sentinel is built to be extensible. You can easily plug in your own Identity Provider or Vector Knowledge Base by implementing our core interfaces.
-
-### 1. Identity Connector
-
-The `IdentityConnector` is responsible for the "Handshake." It fetches the source of truth for a user's permissions.
-
-```python
-from sentinel.core.base import IdentityConnector
-
-class MyCustomIdentity(IdentityConnector):
-    async def get_tags(self, user_id: str) -> set[str]:
-        """
-        Fetch permission tags (e.g., ['dept:finance', 'role:admin'])
-        for a specific user.
-
-        NOTE: Always fail-closed. Return an empty set if user is not found.
-        """
-        # Your logic here (e.g., API call to Okta, Auth0, or custom SQL)
-        tags = await my_api.fetch_user_metadata(user_id)
-        return set(tags)
-```
-
-### 2. Knowledge Connector
-
-The `KnowledgeConnector` handles the "Enforcement." It translates those tags into a database-native filter.
-
-```python
-from sentinel.core.base import KnowledgeConnector
-
-class MyCustomVectorStore(KnowledgeConnector):
-    async def search(self, query: str, tags: set[str], n_results: int = 5) -> list[dict]:
-        """
-        Execute a filtered vector search.
-        Results must be a list of dicts: {"text": str, "metadata": dict, "score": float}
-        """
-        filter_criteria = {"access_tags": {"$in": list(tags)}}
-        return await self.client.query(query, filter=filter_criteria, limit=n_results)
-
-    async def ingest(self, text: str, access_tags: list[str], doc_id: str, metadata: dict) -> None:
-        """Securely persist data with mandatory access tags."""
-        metadata["access_tags"] = access_tags
-        await self.client.upsert(id=doc_id, vector=self.embed(text), metadata=metadata)
-```
-
-### Wiring It Up
-
-Once your classes are ready, register them in `sentinel/main.py`:
-
-```python
-def _build_engine():
-    # ... existing logic ...
-    if identity_store == "my_custom_id":
-        identity = MyCustomIdentity(config.custom_url)
-
-    if knowledge_store == "my_custom_store":
-        knowledge = MyCustomVectorStore(config.db_api_key)
-
-    return SentinelEngine(identity, knowledge)
-```
-
-For the full guide — including unit test templates, E2E test conventions, and a reference layout — see **[DEVELOPMENT.md](DEVELOPMENT.md)**.
+See [QUICKSTART.md](QUICKSTART.md) for full setup instructions, AWS auth options, and reranking configuration.
 
 ---
 
 ## MCP Tools
 
 | Tool | Description |
-|---|---|
-| `secure_search(query, user_id)` | Search the KB — returns only documents the user is authorised to see |
-| `ingest_document(text, access_tags, doc_id)` | Ingest a text document with access control tags |
-| `ingest_pdf(access_tags, doc_id, pdf_path)` | Ingest a PDF page-by-page with access tags and optional metadata |
-| `list_user_relationships(user_id)` | *(SpiceDB only)* List all raw SpiceDB relationship tuples for a user — useful for auditing and debugging |
-| `check_config()` | Return the runtime values of all Sentinel environment variables |
+| :--- | :--- |
+| `secure_search(query, user_id)` | Search the KB and return only documents the user is authorized to retrieve |
+| `ingest_document(text, access_tags, doc_id)` | Ingest text with mandatory access tags |
+| `ingest_pdf(access_tags, doc_id, pdf_path)` | Ingest PDF content page by page with access tags |
+| `list_user_relationships(user_id)` | *(SpiceDB only)* Auditing/debugging tool for user relationships |
+| `check_config()` | Return current Sentinel runtime configuration |
+
+---
+
+## Extending Sentinel
+
+Sentinel is connector-driven by design.
+
+### Identity connector
+
+Implement an `IdentityConnector` when you want to resolve permissions from a custom source.
+
+```python
+from sentinel.core.base import IdentityConnector
+
+class MyCustomIdentity(IdentityConnector):
+    async def get_tags(self, user_id: str) -> set[str]:
+        tags = await my_api.fetch_user_metadata(user_id)
+        return set(tags)
+```
+
+### Knowledge connector
+
+Implement a `KnowledgeConnector` when you want to enforce retrieval over a custom backend.
+
+```python
+from sentinel.core.base import KnowledgeConnector
+
+class MyCustomVectorStore(KnowledgeConnector):
+    async def search(self, query: str, tags: set[str], n_results: int = 5) -> list[dict]:
+        filter_criteria = {"access_tags": {"$in": list(tags)}}
+        return await self.client.query(query, filter=filter_criteria, limit=n_results)
+
+    async def ingest(self, text: str, access_tags: list[str], doc_id: str, metadata: dict) -> None:
+        metadata["access_tags"] = access_tags
+        await self.client.upsert(id=doc_id, vector=self.embed(text), metadata=metadata)
+```
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for full extension guidance, test conventions, and project layout.
+
+---
+
+## Example Access Model
+
+### Knowledge base
+
+| Document | Tags | Accessible to |
+| :--- | :--- | :--- |
+| Resume | `recruitment`, `private` | Users with `recruitment` or `private` |
+| Q4 Financial Report | `finance` | Users with `finance` |
+| Engineering Runbook | `engineering` | Users with `engineering` |
+| Company Overview | `public` | Everyone |
+
+### Identity store
+
+| User | Tags |
+| :--- | :--- |
+| `aashish` | `recruitment`, `private` |
+| `alice` | `finance`, `public` |
+| `bob` | `engineering`, `public` |
+| `charlie` | `finance`, `engineering`, `public` |
+
+### Example
+
+```
+secure_search("AWS experience", user_id="aashish")
+```
+
+Sentinel:
+
+1. resolves `aashish` to `{"recruitment", "private"}`
+2. synthesizes an authorization filter
+3. executes a constrained retrieval
+4. returns only matching authorized chunks
+
+If `alice` asks the same question, the query may still be semantically valid, but Sentinel will return nothing if the matching documents fall outside her authorized scope.
 
 ---
 
@@ -276,115 +384,61 @@ For the full guide — including unit test templates, E2E test conventions, and 
 
 ```
 sentinel/
-├── main.py                         # FastMCP entry point — tool definitions
+├── main.py                         # FastMCP entry point
 ├── core/
-│   ├── base.py                     # Abstract connectors (IdentityConnector, KnowledgeConnector)
-│   └── engine.py                   # Orchestrator — ABAC logic, fail-closed enforcement
+│   ├── base.py                     # Abstract connector interfaces
+│   └── engine.py                   # Orchestrator and fail-closed enforcement
 └── connectors/
     ├── identity/
-    │   ├── sqlite.py               # SQLite (local dev)
-    │   ├── ddb.py                  # DynamoDB (production)
-    │   ├── iam.py                  # IAM tag-based (zero-ops AWS)
-    │   └── spicedb.py              # SpiceDB ReBAC (local + production)
+    │   ├── sqlite.py               # SQLite connector
+    │   ├── ddb.py                  # DynamoDB connector
+    │   ├── iam.py                  # IAM-based connector
+    │   └── spicedb.py              # SpiceDB-based ReBAC connector
     └── knowledge/
-        ├── chroma.py               # ChromaDB (local dev)
-        └── bedrock.py              # AWS Bedrock KB (production)
+        ├── chroma.py               # ChromaDB connector
+        └── bedrock.py              # Bedrock KB connector
+
 scripts/
-├── setup_aws.py                    # Demo provisioning script (not for production)
-├── seed_ddb.py                     # Seed DynamoDB with test users
-├── init_db.py                      # Initialise local SQLite DB
-└── ingest_seed_docs.py             # Bulk-ingest local seed documents
+├── setup_aws.py                    # Demo provisioning
+├── seed_ddb.py                     # Seed DynamoDB test users
+├── init_db.py                      # Init local SQLite DB
+└── ingest_seed_docs.py             # Seed local documents
 ```
 
 ---
 
-## Access Control in Practice
+## Positioning
 
-### What's in the knowledge base
+Sentinel is not a prompt wrapper.
 
-| Document | Tags | Who can access |
-|---|---|---|
-| Aashish Ravindran Resume | `recruitment`, `private` | Users with `recruitment` or `private` |
-| Q4 2025 Financial Report | `finance` | Users with `finance` |
-| Engineering Runbook | `engineering` | Users with `engineering` |
-| Company Overview | `public` | Everyone |
+It is not a replacement identity provider.
 
-### Identity store (DynamoDB)
+It is not another long-lived permissions database.
 
-| User | Tags |
-|---|---|
-| `aashish` | `recruitment`, `private` |
-| `alice` | `finance`, `public` |
-| `bob` | `engineering`, `public` |
-| `charlie` | `finance`, `engineering`, `public` |
-
-### Example: Aashish asks about his own resume
-
-```
-secure_search("AWS experience", user_id="aashish")
-```
-
-1. Identity store returns `{"recruitment", "private"}` for `aashish`
-2. Sentinel builds filter: `tag_recruitment = true OR tag_private = true`
-3. Bedrock retrieves the resume — it matches on `tag_private`
-4. Result returned to the LLM ✅
-
-```
-[1] Aashish Ravindran Resume (score: 0.82)
-...experience with AWS Bedrock, DynamoDB, OpenSearch Serverless...
-```
-
-### Example: Alice asks the same question
-
-```
-secure_search("AWS experience", user_id="alice")
-```
-
-1. Identity store returns `{"finance", "public"}` for `alice`
-2. Sentinel builds filter: `tag_finance = true OR tag_public = true`
-3. Bedrock finds no documents matching those tags that are relevant to the query
-4. Alice gets nothing — not because the query failed, but because she was never authorised to see it ✅
-
-```
-You do not have access to documents relevant to this query.
-The information may exist but is not within your permitted scope.
-```
-
-The resume was never retrieved. Alice's LLM context was never contaminated with data she shouldn't see. No prompt engineering can change this — the filter runs before retrieval.
-
-### Example: Unknown user
-
-```
-secure_search("company overview", user_id="unknown_user")
-```
-
-1. Identity store returns `∅` — user not found
-2. Sentinel **fail-closes** immediately — no knowledge base call is made
-3. `Access Denied` returned before a single vector search executes ✅
+Sentinel is a stateless enforcement layer that connects identity truth to retrieval behavior so access control is applied where it matters most: **before data enters model context.**
 
 ---
 
-## Research & Lineage
+## Documentation
 
-Sentinel is inspired by the **Relationship-Based Access Control (ReBAC)** paradigm and the architectural principles laid out in Google's **Zanzibar** paper. While Zanzibar is designed for planet-scale authorisation (10M+ QPS), Sentinel brings those core security principles to the **Agentic RAG** ecosystem.
-
-> *"Sentinel acts as a Lightweight Handshake — providing the security of a ReBAC system without the infrastructure overhead of a full Zanzibar implementation."*
-
-### Key References
-
-- **Zanzibar: Google's Consistent, Global Authorization System** (Pang et al., USENIX ATC 2019)
-  [Read the paper →](https://www.usenix.org/system/files/atc19-pang.pdf)
-  *How Google manages billions of permissions across Drive, YouTube, and Cloud at 10M+ QPS.*
-
-- **Related implementations:** [SpiceDB](https://github.com/authzed/spicedb), [OpenFGA](https://openfga.dev/) — production ReBAC systems that inspired Sentinel's stateless, tag-intersection model.
-
-Traditional RAG fails at the retrieval layer by being identity-blind. By implementing a **Stateless Middleware** — as suggested by modern ReBAC implementations — Sentinel ensures security is enforced *before* the LLM sees a single byte of data.
+- [QUICKSTART.md](QUICKSTART.md)
+- [CONNECTORS.md](CONNECTORS.md)
+- [DEVELOPMENT.md](DEVELOPMENT.md)
+- [RESULTS.md](RESULTS.md)
 
 ---
 
-## Why Sentinel?
+## Citation
 
-Sentinel isn't just a search tool — it's a **Compliance-as-Code** layer for AI. It allows CISOs to say **yes** to Generative AI by providing a hard security boundary that agents cannot bypass, prompt-engineer around, or hallucinate past.
+If you use Sentinel in academic or technical work, see [CITATION.cff](CITATION.cff).
+
+---
+
+## Contributing / Feedback
+
+Issues, ideas, and connector requests are welcome.
+
+If you are working on secure RAG, identity-aware retrieval, or agentic systems with real access boundaries, I'd love to hear how you're approaching the problem.
 
 ---
 
