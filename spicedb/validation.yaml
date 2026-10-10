@@ -1,0 +1,26 @@
+# Run with: zed validate spicedb/validation.yaml
+schemaFile: "./schema.zed"
+relationships: |-
+  tag:finance#member@user:alice
+  tag:public#member@user:alice
+  tag:public#member@user:bob
+  tag:engineering#member@user:bob
+  tag:finance#member@user:charlie
+  tag:engineering#member@user:charlie
+  tag:public#member@user:charlie
+  team:interns#member@user:intern
+  tag:public#member@team:interns#member
+  platform:sentinel#admin@user:root
+assertions:
+  assertTrue:
+    - "tag:finance#access@user:alice"
+    - "tag:engineering#access@user:bob"
+    - "tag:public#access@user:intern"
+    - "platform:sentinel#administer@user:root"
+  assertFalse:
+    - "tag:finance#access@user:bob"
+    - "tag:finance#access@user:intern"
+    - "tag:engineering#access@user:alice"
+    - "platform:sentinel#administer@user:alice"
+    - "platform:sentinel#administer@user:charlie"
+    - "tag:public#access@user:root"

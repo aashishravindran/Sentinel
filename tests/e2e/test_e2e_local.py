@@ -191,3 +191,19 @@ async def test_charlie_sees_all_doc_types(engine):
 
     assert "e2e_finance_budget" in finance_ids
     assert "e2e_eng_runbook" in eng_ids
+
+
+@requires_spicedb
+@pytest.mark.e2e
+@pytest.mark.asyncio
+async def test_intern_inherits_public_through_a_team(engine):
+    """ReBAC: the intern holds no tag directly; team:interns grants public."""
+    assert await engine.resolve_scope("intern") == {"public"}
+
+
+@requires_spicedb
+@pytest.mark.e2e
+@pytest.mark.asyncio
+async def test_platform_admin_comes_from_spicedb(engine):
+    assert await engine.is_admin("root")
+    assert not await engine.is_admin("charlie")
