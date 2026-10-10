@@ -95,7 +95,6 @@ return.
 ## Try it
 
 ```bash
-git clone https://github.com/aashishravindran/sentinel-engine
 git clone https://github.com/aashishravindran/Sentinel && cd Sentinel
 uv sync && uv run python -m demo.run_demo
 ```

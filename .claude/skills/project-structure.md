@@ -10,9 +10,9 @@ one policy engine:
 - **AgentCore Gateway** (`sentinel/adapters/agentcore`): REQUEST/RESPONSE interceptor Lambdas
   and a Lambda target, deployed by the TypeScript CDK construct in `infra/cdk`.
 
-The engine, connectors, filter builders, OIDC verification and ingest stamping live in the
-sibling repo **sentinel-engine** (`../sentinel-engine`, package `sentinel_engine`), resolved by
-uv from `[tool.uv.sources]`.
+The engine, connectors, filter builders, OIDC verification and ingest stamping live in
+**sentinel-engine** (github.com/aashishravindran/sentinel-engine, package `sentinel_engine`),
+pinned by git tag in `[tool.uv.sources]`.
 
 ## Layout
 

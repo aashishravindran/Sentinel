@@ -5,8 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Sentinel makes AI agents retrieve only what their human may read. Two adapters, the MCP
-server and AgentCore Gateway interceptors, share one policy engine from the sibling repo
-`../sentinel-engine` (package `sentinel_engine`). Identity always comes from the transport
+server and AgentCore Gateway interceptors, share one policy engine from
+github.com/aashishravindran/sentinel-engine (package `sentinel_engine`, pinned by tag in
+`[tool.uv.sources]`; point it at a local path to develop both together). Identity always comes from the transport
 (stdio launcher or verified JWT `sub`), never from tool arguments; permissions are resolved
 live (SpiceDB, DynamoDB, SQLite, IAM) and pushed into the vector query as a filter.
 
@@ -15,7 +16,7 @@ See `.claude/skills/project-structure.md` for the layout and conventions.
 ## Commands
 
 ```bash
-uv sync                                              # needs ../sentinel-engine checked out
+uv sync                                              # sentinel-engine from its git tag
 SENTINEL_STDIO_USER=alice SENTINEL_IDENTITY_STORE=sqlite SENTINEL_KNOWLEDGE_STORE=chroma \
   uv run python -m sentinel.main                     # MCP server (stdio)
 uv run python -m demo.run_demo                       # local end-to-end demo

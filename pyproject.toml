@@ -20,7 +20,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-sentinel-engine = { path = "../sentinel-engine", editable = true }
+sentinel-engine = { git = "https://github.com/aashishravindran/sentinel-engine", tag = "v0.1.0" }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

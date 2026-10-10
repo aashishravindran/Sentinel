@@ -20,12 +20,12 @@ WHEELS="${ROOT}/build/wheels"
 rm -rf "${OUT}" "${WHEELS}"
 mkdir -p "${OUT}/sentinel/adapters" "${WHEELS}"
 
-if [[ -z "${SENTINEL_ENGINE_SPEC:-}" ]]; then
-  # Pure-Python package: build a wheel from the sibling checkout.
+if [[ -z "${SENTINEL_ENGINE_SPEC:-}" && -d "${ROOT}/../sentinel-engine" ]]; then
+  # Pure-Python package: build a wheel from a local checkout for side-by-side development.
   uv build --quiet --wheel --out-dir "${WHEELS}" "${ROOT}/../sentinel-engine"
   ENGINE_SPEC="sentinel-engine[aws] @ file://$(ls "${WHEELS}"/sentinel_engine-*.whl)"
 else
-  ENGINE_SPEC="${SENTINEL_ENGINE_SPEC}"
+  ENGINE_SPEC="${SENTINEL_ENGINE_SPEC:-sentinel-engine[aws] @ git+https://github.com/aashishravindran/sentinel-engine@v0.1.0}"
 fi
 
 uv pip install \
