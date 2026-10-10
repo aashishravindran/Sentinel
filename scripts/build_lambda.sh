@@ -7,26 +7,30 @@
 # No Docker needed. ChromaDB and torch are not included.
 #
 # Usage:
-#   ./scripts/build_lambda.sh
-#   SENTINEL_ENGINE_SPEC="sentinel-engine[aws] @ git+https://github.com/aashishravindran/sentinel-engine@v0.1.0" \
-#     ./scripts/build_lambda.sh
+#   ./scripts/build_lambda.sh                          # ../sentinel-engine if present,
+#                                                      # else the pinned tag from GitHub
+#   SENTINEL_ENGINE_REF=v0.2.0 ./scripts/build_lambda.sh
 # -----------------------------------------------------------------------------
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${ROOT}/build/lambda"
 WHEELS="${ROOT}/build/wheels"
+ENGINE_DIR="${SENTINEL_ENGINE_DIR:-${ROOT}/../sentinel-engine}"
+ENGINE_REF="${SENTINEL_ENGINE_REF:-v0.1.0}"
 
-rm -rf "${OUT}" "${WHEELS}"
+rm -rf "${OUT}" "${WHEELS}" "${ROOT}/build/sentinel-engine"
 mkdir -p "${OUT}/sentinel/adapters" "${WHEELS}"
 
-if [[ -z "${SENTINEL_ENGINE_SPEC:-}" && -d "${ROOT}/../sentinel-engine" ]]; then
-  # Pure-Python package: build a wheel from a local checkout for side-by-side development.
-  uv build --quiet --wheel --out-dir "${WHEELS}" "${ROOT}/../sentinel-engine"
-  ENGINE_SPEC="sentinel-engine[aws] @ file://$(ls "${WHEELS}"/sentinel_engine-*.whl)"
-else
-  ENGINE_SPEC="${SENTINEL_ENGINE_SPEC:-sentinel-engine[aws] @ git+https://github.com/aashishravindran/sentinel-engine@v0.1.0}"
+if [[ ! -d "${ENGINE_DIR}" ]]; then
+  # No local checkout: build the pinned release.
+  ENGINE_DIR="${ROOT}/build/sentinel-engine"
+  git clone --quiet --depth 1 --branch "${ENGINE_REF}" \
+    https://github.com/aashishravindran/sentinel-engine "${ENGINE_DIR}"
 fi
+# Pure-Python package: build its wheel here so every dependency can stay binary-only.
+uv build --quiet --wheel --out-dir "${WHEELS}" "${ENGINE_DIR}"
+ENGINE_SPEC="sentinel-engine[aws] @ file://$(ls "${WHEELS}"/sentinel_engine-*.whl)"
 
 uv pip install \
   --quiet \

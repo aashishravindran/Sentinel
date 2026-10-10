@@ -16,9 +16,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install zed (SpiceDB schema validation)
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          curl -fsSL https://github.com/authzed/zed/releases/latest/download/zed_linux_amd64.tar.gz | tar -xz zed
-          sudo mv zed /usr/local/bin/
+          gh release download --repo authzed/zed --pattern 'zed_*_linux_amd64_gnu.tar.gz' -O zed.tgz
+          tar -xzf zed.tgz zed && sudo mv zed /usr/local/bin/ && zed version
       - working-directory: Sentinel
         run: |
           uv sync
@@ -51,8 +53,6 @@ jobs:
           cache-dependency-path: Sentinel/infra/cdk/package-lock.json
       - name: Build the Lambda bundle
         working-directory: Sentinel
-        env:
-          SENTINEL_ENGINE_SPEC: "sentinel-engine[aws] @ git+https://github.com/aashishravindran/sentinel-engine@v0.1.0"
         run: ./scripts/build_lambda.sh
       - working-directory: Sentinel/infra/cdk
         run: |
