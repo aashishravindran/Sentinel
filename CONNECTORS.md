@@ -354,6 +354,7 @@ Implement the abstract base class from `sentinel/core/base.py`:
 ```python
 from sentinel_engine.base import IdentityConnector
 
+
 class MyIdentityConnector(IdentityConnector):
     async def get_tags(self, user_id: str) -> set[str]:
         # Return the set of permission tags for this user.
@@ -363,6 +364,7 @@ class MyIdentityConnector(IdentityConnector):
 
 ```python
 from sentinel_engine.base import KnowledgeConnector
+
 
 class MyKnowledgeConnector(KnowledgeConnector):
     async def search(self, query: str, tags: set[str], n_results: int = 5) -> list[dict]:

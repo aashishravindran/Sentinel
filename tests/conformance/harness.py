@@ -12,8 +12,10 @@ import json
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Any
 
 from fastmcp import Client
+from fastmcp.exceptions import ToolError
 from fastmcp.utilities.tests import run_server_async
 from sentinel_engine.engine import SentinelEngine
 from sentinel_engine.results import ACCESS_DENIED
@@ -26,6 +28,7 @@ from tests.support.tokens import OIDC, bearer, token_for
 
 DENIED = "denied"
 Outcome = frozenset[str] | str
+Arguments = dict[str, Any] | None
 MCP_RESULT_TITLE = re.compile(r"^\[\d+\] (\S+)", re.MULTILINE)
 
 
@@ -56,34 +59,59 @@ def _from_gateway(body: dict) -> Outcome:
     return frozenset(item["metadata"]["title"] for item in items)
 
 
-async def mcp_stdio(backend: Backend, persona: str, query: str) -> Outcome:
+async def mcp_stdio(
+    backend: Backend, persona: str, query: str, *, extra: Arguments = None, token: str | None = None
+) -> Outcome:
     settings = ServerSettings("stdio", stdio_user=persona, min_relevance_score=0.0)
+    arguments = {"query": query, "n_results": 20, **(extra or {})}
     async with Client(create_server(backend.engine, settings)) as client:
-        result = await client.call_tool("secure_search", {"query": query, "n_results": 20})
+        try:
+            result = await client.call_tool("secure_search", arguments)
+        except ToolError:
+            return DENIED
     return _from_mcp_text(result.content[0].text)
 
 
-async def mcp_http(backend: Backend, persona: str, query: str) -> Outcome:
+async def mcp_http(
+    backend: Backend, persona: str, query: str, *, extra: Arguments = None, token: str | None = None
+) -> Outcome:
     settings = ServerSettings("http", oidc=OIDC, min_relevance_score=0.0)
     server = create_server(backend.engine, settings)
-    async with run_server_async(server) as url, Client(url, auth=token_for(persona)) as client:
-        result = await client.call_tool("secure_search", {"query": query, "n_results": 20})
+    arguments = {"query": query, "n_results": 20, **(extra or {})}
+    try:
+        async with (
+            run_server_async(server) as url,
+            Client(url, auth=token or token_for(persona)) as client,
+        ):
+            result = await client.call_tool("secure_search", arguments)
+    except ToolError:
+        return DENIED
+    except Exception as exc:
+        if "401" in str(exc) or "nauthorized" in str(exc):
+            return DENIED
+        raise
     return _from_mcp_text(result.content[0].text)
 
 
-async def gateway_lambda_target(backend: Backend, persona: str, query: str) -> Outcome:
+async def gateway_lambda_target(
+    backend: Backend, persona: str, query: str, *, extra: Arguments = None, token: str | None = None
+) -> Outcome:
     rt = runtime(backend.identity, backend.kb)
-    args = {"query": query, "n_results": 20}
-    return _from_gateway(await call_through_gateway(rt, LAMBDA_TOOL, args, bearer(persona)))
+    arguments = {"query": query, "n_results": 20, **(extra or {})}
+    authorization = f"Bearer {token}" if token else bearer(persona)
+    return _from_gateway(await call_through_gateway(rt, LAMBDA_TOOL, arguments, authorization))
 
 
-async def gateway_managed_kb(backend: Backend, persona: str, query: str) -> Outcome:
+async def gateway_managed_kb(
+    backend: Backend, persona: str, query: str, *, extra: Arguments = None, token: str | None = None
+) -> Outcome:
     rt = runtime(backend.identity, backend.kb)
-    args = {"retrievalQuery": {"text": query}}
-    return _from_gateway(await call_through_gateway(rt, KB_TOOL, args, bearer(persona)))
+    arguments = {"retrievalQuery": {"text": query}, **(extra or {})}
+    authorization = f"Bearer {token}" if token else bearer(persona)
+    return _from_gateway(await call_through_gateway(rt, KB_TOOL, arguments, authorization))
 
 
-ADAPTERS: dict[str, Callable[[Backend, str, str], Awaitable[Outcome]]] = {
+ADAPTERS: dict[str, Callable[..., Awaitable[Outcome]]] = {
     "mcp-stdio": mcp_stdio,
     "mcp-http": mcp_http,
     "gateway-lambda-target": gateway_lambda_target,

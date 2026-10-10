@@ -1,0 +1,70 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: Sentinel
+      # uv resolves sentinel-engine from the sibling checkout (see [tool.uv.sources]).
+      - uses: actions/checkout@v4
+        with:
+          repository: aashishravindran/sentinel-engine
+          path: sentinel-engine
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Install zed (SpiceDB schema validation)
+        run: |
+          curl -fsSL https://github.com/authzed/zed/releases/latest/download/zed_linux_amd64.tar.gz | tar -xz zed
+          sudo mv zed /usr/local/bin/
+      - working-directory: Sentinel
+        run: |
+          uv sync
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run pyright
+      - name: Tests, conformance and red team
+        working-directory: Sentinel
+        run: uv run pytest -q -m "not e2e and not aws and not load"
+      - name: Leak rate must be zero
+        working-directory: Sentinel
+        run: |
+          python3 -c "import json,sys; r=json.load(open('build/redteam.json')); print(r['attempts'],'attempts,',r['leaks'],'leaks'); sys.exit(r['leaks'] != 0)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: redteam-report
+          path: Sentinel/build/redteam.json
+
+  cdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: Sentinel
+      - uses: actions/checkout@v4
+        with:
+          repository: aashishravindran/sentinel-engine
+          path: sentinel-engine
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Sentinel/infra/cdk/package-lock.json
+      - name: Build the Lambda bundle
+        working-directory: Sentinel
+        run: ./scripts/build_lambda.sh
+      - working-directory: Sentinel/infra/cdk
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm test
+          npx cdk synth --quiet -c knowledgeBaseId=EXAMPLEKB01 -c knowledgeBaseKind=standard
+          npx cdk synth --quiet -c knowledgeBaseId=EXAMPLEKB01 -c knowledgeBaseKind=managed-kb

@@ -64,9 +64,7 @@ class MyCustomVectorStore(KnowledgeConnector):
     def __init__(self, db_url: str, api_key: str):
         self.client = MyVectorClient(db_url, api_key)
 
-    async def search(
-        self, query: str, tags: set[str], n_results: int = 5
-    ) -> list[dict]:
+    async def search(self, query: str, tags: set[str], n_results: int = 5) -> list[dict]:
         """
         Execute a tag-filtered vector search.
 
@@ -87,10 +85,7 @@ class MyCustomVectorStore(KnowledgeConnector):
             filter=tag_filter,
             limit=n_results,
         )
-        return [
-            {"text": r.content, "metadata": r.metadata, "score": r.score}
-            for r in raw
-        ]
+        return [{"text": r.content, "metadata": r.metadata, "score": r.score} for r in raw]
 
     async def ingest(
         self,
@@ -135,6 +130,7 @@ def _build_engine() -> SentinelEngine:
         ...
     elif identity_store == "my_provider":
         from sentinel_engine.connectors.identity.my_provider import MyCustomIdentity
+
         identity = MyCustomIdentity(
             api_url=os.environ["MY_PROVIDER_URL"],
             api_key=os.environ["MY_PROVIDER_KEY"],
@@ -147,6 +143,7 @@ def _build_engine() -> SentinelEngine:
         ...
     elif knowledge_store == "my_store":
         from sentinel_engine.connectors.knowledge.my_store import MyCustomVectorStore
+
         knowledge = MyCustomVectorStore(
             db_url=os.environ["MY_STORE_URL"],
             api_key=os.environ["MY_STORE_KEY"],
@@ -304,14 +301,16 @@ async def engine():
     knowledge = MyCustomVectorStore(db_url="https://fake", api_key="key")
 
     # Wire in fixed responses so tests are deterministic
-    identity.get_tags = AsyncMock(side_effect=lambda uid: {
-        "alice": {"finance", "public"},
-        "bob":   {"engineering"},
-    }.get(uid, set()))
+    identity.get_tags = AsyncMock(
+        side_effect=lambda uid: {
+            "alice": {"finance", "public"},
+            "bob": {"engineering"},
+        }.get(uid, set())
+    )
 
-    knowledge.search = AsyncMock(return_value=[
-        {"text": "Budget doc", "metadata": {"access_tags": "finance"}, "score": 0.9}
-    ])
+    knowledge.search = AsyncMock(
+        return_value=[{"text": "Budget doc", "metadata": {"access_tags": "finance"}, "score": 0.9}]
+    )
 
     return SentinelEngine(identity, knowledge)
 

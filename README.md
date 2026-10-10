@@ -316,6 +316,7 @@ Implement an `IdentityConnector` when you want to resolve permissions from a cus
 ```python
 from sentinel_engine.base import IdentityConnector
 
+
 class MyCustomIdentity(IdentityConnector):
     async def get_tags(self, user_id: str) -> set[str]:
         tags = await my_api.fetch_user_metadata(user_id)
@@ -328,6 +329,7 @@ Implement a `KnowledgeConnector` when you want to enforce retrieval over a custo
 
 ```python
 from sentinel_engine.base import KnowledgeConnector
+
 
 class MyCustomVectorStore(KnowledgeConnector):
     async def search(self, query: str, tags: set[str], n_results: int = 5) -> list[dict]:

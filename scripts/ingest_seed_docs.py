@@ -12,6 +12,7 @@ trailing HTML comment `<!-- access_tags: tag1,tag2 -->`, and ingests it.
 Usage:
     python scripts/ingest_seed_docs.py
 """
+
 import asyncio
 import os
 import re

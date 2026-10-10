@@ -14,14 +14,15 @@ Usage:
     python scripts/seed_ddb.py --table sentinel-identity --region us-east-1
     python scripts/seed_ddb.py --table sentinel-identity --region us-east-1 --no-seed
 """
+
 import argparse
 import sys
 
 import boto3
 
 SEED_DATA = [
-    ("alice",   {"finance", "public"}),
-    ("bob",     {"public", "engineering"}),
+    ("alice", {"finance", "public"}),
+    ("bob", {"public", "engineering"}),
     ("charlie", {"finance", "engineering", "public"}),
 ]
 
@@ -32,7 +33,7 @@ def seed_table(table_name: str, region: str, seed: bool = True) -> None:
 
     # Verify the table exists before writing.
     try:
-        status = table.table_status
+        table.load()
     except ddb.meta.client.exceptions.ResourceNotFoundException:
         sys.exit(f"ERROR: DynamoDB table '{table_name}' not found in {region}.")
 
@@ -54,9 +55,9 @@ if __name__ == "__main__":
         description="Seed the Sentinel DynamoDB identity table.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--table",   required=True,          help="DynamoDB table name")
-    p.add_argument("--region",  default="us-east-1",    help="AWS region")
-    p.add_argument("--no-seed", action="store_true",    help="Verify table exists but skip seeding")
+    p.add_argument("--table", required=True, help="DynamoDB table name")
+    p.add_argument("--region", default="us-east-1", help="AWS region")
+    p.add_argument("--no-seed", action="store_true", help="Verify table exists but skip seeding")
     args = p.parse_args()
 
     seed_table(args.table, args.region, seed=not args.no_seed)

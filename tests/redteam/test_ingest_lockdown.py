@@ -10,7 +10,7 @@ from sentinel_engine.results import ACCESS_DENIED
 
 from sentinel.adapters.mcp.server import create_server
 from sentinel.adapters.mcp.settings import ServerSettings
-from tests.support.fakes import DictIdentity, StubBedrockKB
+from tests.support.fakes import SEED_DOCS, DictIdentity, StubBedrockKB
 from tests.support.pdf import make_pdf
 
 pytestmark = pytest.mark.redteam
@@ -46,7 +46,7 @@ async def _call(
 async def test_non_admins_cannot_use_admin_tools(tool, user):
     kb = StubBedrockKB.seeded()
     assert await _call(user, tool, ADMIN_TOOLS[tool], kb=kb) == ACCESS_DENIED
-    assert len(kb.docs) == 4
+    assert len(kb.docs) == len(SEED_DOCS)
 
 
 @pytest.mark.parametrize("tool", sorted(ADMIN_TOOLS))
@@ -83,7 +83,7 @@ async def test_ingest_rejects_paths_and_bad_tags(arguments):
     kb = StubBedrockKB.seeded()
     reply = await _call("root", "ingest_document", {"text": "x", **arguments}, kb=kb)
     assert reply.startswith("Error:")
-    assert len(kb.docs) == 4
+    assert len(kb.docs) == len(SEED_DOCS)
 
 
 @pytest.mark.parametrize("metadata", [{"access_tags": "public"}, {"tag_public": "true"}])

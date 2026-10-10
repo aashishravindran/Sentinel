@@ -7,11 +7,12 @@
 Initialize the SQLite permissions database.
 
 Usage:
-    python scripts/init_db.py                        # uses SQLITE_DB_PATH env var or ./data/permissions.db
-    python scripts/init_db.py --no-seed              # schema only, no example users
+    python scripts/init_db.py            # SQLITE_DB_PATH or ./data/permissions.db
+    python scripts/init_db.py --no-seed  # schema only, no example users
 """
-import asyncio
+
 import argparse
+import asyncio
 import os
 
 import aiosqlite
@@ -25,10 +26,10 @@ CREATE TABLE IF NOT EXISTS permissions (
 """
 
 SEED_DATA = [
-    ("alice",   "finance"),
-    ("alice",   "public"),
-    ("bob",     "public"),
-    ("bob",     "engineering"),
+    ("alice", "finance"),
+    ("alice", "public"),
+    ("bob", "public"),
+    ("bob", "engineering"),
     ("charlie", "finance"),
     ("charlie", "engineering"),
     ("charlie", "public"),
