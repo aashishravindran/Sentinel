@@ -14,9 +14,9 @@ Run with:
 import pytest
 import pytest_asyncio
 
-from sentinel.connectors.identity.spicedb import SpiceDBIdentityConnector
-from sentinel.connectors.knowledge.chroma import ChromaKnowledgeConnector
-from sentinel.core.engine import AccessDeniedError, SentinelEngine
+from sentinel_engine.connectors.identity.spicedb import SpiceDBIdentityConnector
+from sentinel_engine.connectors.knowledge.chroma import ChromaKnowledgeConnector
+from sentinel_engine.engine import AccessDeniedError, SentinelEngine
 
 from tests.e2e.conftest import requires_spicedb
 

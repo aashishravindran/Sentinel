@@ -314,7 +314,7 @@ Sentinel is connector-driven by design.
 Implement an `IdentityConnector` when you want to resolve permissions from a custom source.
 
 ```python
-from sentinel.core.base import IdentityConnector
+from sentinel_engine.base import IdentityConnector
 
 class MyCustomIdentity(IdentityConnector):
     async def get_tags(self, user_id: str) -> set[str]:
@@ -327,7 +327,7 @@ class MyCustomIdentity(IdentityConnector):
 Implement a `KnowledgeConnector` when you want to enforce retrieval over a custom backend.
 
 ```python
-from sentinel.core.base import KnowledgeConnector
+from sentinel_engine.base import KnowledgeConnector
 
 class MyCustomVectorStore(KnowledgeConnector):
     async def search(self, query: str, tags: set[str], n_results: int = 5) -> list[dict]:

@@ -17,7 +17,7 @@ The `IdentityConnector` is responsible for the **Permission Handshake**. It fetc
 ```python
 # sentinel/connectors/identity/my_provider.py
 
-from sentinel.core.base import IdentityConnector
+from sentinel_engine.base import IdentityConnector
 
 
 class MyCustomIdentity(IdentityConnector):
@@ -57,7 +57,7 @@ The `KnowledgeConnector` handles **Enforcement**. It translates the user's tags 
 ```python
 # sentinel/connectors/knowledge/my_store.py
 
-from sentinel.core.base import KnowledgeConnector
+from sentinel_engine.base import KnowledgeConnector
 
 
 class MyCustomVectorStore(KnowledgeConnector):
@@ -134,7 +134,7 @@ def _build_engine() -> SentinelEngine:
     if identity_store == "sqlite":
         ...
     elif identity_store == "my_provider":
-        from sentinel.connectors.identity.my_provider import MyCustomIdentity
+        from sentinel_engine.connectors.identity.my_provider import MyCustomIdentity
         identity = MyCustomIdentity(
             api_url=os.environ["MY_PROVIDER_URL"],
             api_key=os.environ["MY_PROVIDER_KEY"],
@@ -146,7 +146,7 @@ def _build_engine() -> SentinelEngine:
     if knowledge_store == "chroma":
         ...
     elif knowledge_store == "my_store":
-        from sentinel.connectors.knowledge.my_store import MyCustomVectorStore
+        from sentinel_engine.connectors.knowledge.my_store import MyCustomVectorStore
         knowledge = MyCustomVectorStore(
             db_url=os.environ["MY_STORE_URL"],
             api_key=os.environ["MY_STORE_KEY"],
@@ -193,7 +193,7 @@ Mock your external API and verify the two critical behaviours: known users retur
 
 from unittest.mock import AsyncMock, patch
 import pytest
-from sentinel.connectors.identity.my_provider import MyCustomIdentity
+from sentinel_engine.connectors.identity.my_provider import MyCustomIdentity
 
 
 @pytest.fixture
@@ -234,7 +234,7 @@ Test the search filter logic and the ingestion path. Mock the underlying vector 
 
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
-from sentinel.connectors.knowledge.my_store import MyCustomVectorStore
+from sentinel_engine.connectors.knowledge.my_store import MyCustomVectorStore
 
 
 @pytest.fixture
@@ -293,9 +293,9 @@ import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock
 
-from sentinel.core.engine import SentinelEngine, AccessDeniedError
-from sentinel.connectors.identity.my_provider import MyCustomIdentity
-from sentinel.connectors.knowledge.my_store import MyCustomVectorStore
+from sentinel_engine.engine import SentinelEngine, AccessDeniedError
+from sentinel_engine.connectors.identity.my_provider import MyCustomIdentity
+from sentinel_engine.connectors.knowledge.my_store import MyCustomVectorStore
 
 
 @pytest_asyncio.fixture
@@ -350,8 +350,8 @@ import os
 import pytest
 import pytest_asyncio
 
-from sentinel.connectors.identity.my_provider import MyCustomIdentity
-from sentinel.core.engine import AccessDeniedError, SentinelEngine
+from sentinel_engine.connectors.identity.my_provider import MyCustomIdentity
+from sentinel_engine.engine import AccessDeniedError, SentinelEngine
 
 requires_my_provider = pytest.mark.skipif(
     not os.environ.get("MY_PROVIDER_URL"),

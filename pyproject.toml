@@ -1,32 +1,25 @@
 [project]
 name = "sentinel-rag"
 version = "0.1.0"
-description = "ABAC middleware for RAG pipelines via MCP"
+description = "Permission-aware RAG for AI agents: MCP server and AgentCore Gateway adapters over sentinel-engine"
 requires-python = ">=3.11"
 dependencies = [
-    "fastmcp>=2.0",
-    "aiosqlite>=0.20",
-    "chromadb>=0.5",
-    "sentence-transformers>=2.7",
+    "sentinel-engine[sqlite,spicedb,aws,chroma]",
+    "fastmcp>=3.1.1,<4",
     "pypdf>=4.0",
     "python-dotenv>=1.0",
-    "boto3>=1.40.61",
-    "requests-aws4auth>=1.3.1",
-    "aioboto3>=15.5.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+    "pyright>=1.1.380",
 ]
-aws = [
-    "aioboto3>=13.0",
-    "boto3>=1.34",
-]
-spicedb = [
-    "authzed>=0.8",
-]
+
+[tool.uv.sources]
+sentinel-engine = { path = "../sentinel-engine", editable = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

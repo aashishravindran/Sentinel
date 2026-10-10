@@ -24,9 +24,9 @@ import os
 import pytest
 import pytest_asyncio
 
-from sentinel.connectors.identity.ddb import DynamoDBIdentityConnector
-from sentinel.connectors.knowledge.bedrock import BedrockKnowledgeConnector
-from sentinel.core.engine import AccessDeniedError, SentinelEngine
+from sentinel_engine.connectors.identity.ddb import DynamoDBIdentityConnector
+from sentinel_engine.connectors.knowledge.bedrock import BedrockKnowledgeConnector
+from sentinel_engine.engine import AccessDeniedError, SentinelEngine
 
 from tests.e2e.conftest import requires_aws
 

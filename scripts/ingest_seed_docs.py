@@ -17,7 +17,7 @@ import os
 import re
 from pathlib import Path
 
-from sentinel.connectors.knowledge.chroma import ChromaKnowledgeConnector
+from sentinel_engine.connectors.knowledge.chroma import ChromaKnowledgeConnector
 
 TAG_PATTERN = re.compile(r"<!--\s*access_tags:\s*([^-]+?)\s*-->")
 SEED_DIR = Path(__file__).parent.parent / "docs" / "seed"

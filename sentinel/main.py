@@ -14,9 +14,9 @@ from fastmcp import FastMCP, Context
 # content that leads to hallucination.
 MIN_RELEVANCE_SCORE = float(os.environ.get("MIN_RELEVANCE_SCORE", "0.25"))
 
-from sentinel.core.engine import SentinelEngine, AccessDeniedError
-from sentinel.connectors.identity.sqlite import SQLiteIdentityConnector
-from sentinel.connectors.knowledge.chroma import ChromaKnowledgeConnector
+from sentinel_engine.engine import SentinelEngine, AccessDeniedError
+from sentinel_engine.connectors.identity.sqlite import SQLiteIdentityConnector
+from sentinel_engine.connectors.knowledge.chroma import ChromaKnowledgeConnector
 
 
 def _build_engine() -> SentinelEngine:
@@ -27,12 +27,12 @@ def _build_engine() -> SentinelEngine:
         db_path = os.environ.get("SQLITE_DB_PATH", "./data/permissions.db")
         identity = SQLiteIdentityConnector(db_path)
     elif identity_store == "dynamodb":
-        from sentinel.connectors.identity.ddb import DynamoDBIdentityConnector
+        from sentinel_engine.connectors.identity.ddb import DynamoDBIdentityConnector
         table_name = os.environ["DDB_TABLE_NAME"]
         region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
         identity = DynamoDBIdentityConnector(table_name, region)
     elif identity_store == "spicedb":
-        from sentinel.connectors.identity.spicedb import SpiceDBIdentityConnector
+        from sentinel_engine.connectors.identity.spicedb import SpiceDBIdentityConnector
         endpoint = os.environ["SPICEDB_ENDPOINT"]
         token = os.environ["SPICEDB_TOKEN"]
         tls = os.environ.get("SPICEDB_TLS", "true").lower() == "true"
@@ -46,7 +46,7 @@ def _build_engine() -> SentinelEngine:
             user_type=user_type,
         )
     elif identity_store == "iam":
-        from sentinel.connectors.identity.iam import IAMIdentityConnector
+        from sentinel_engine.connectors.identity.iam import IAMIdentityConnector
         region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
         principal_type = os.environ.get("IAM_PRINCIPAL_TYPE", "user")
         tag_format = os.environ.get("IAM_TAG_FORMAT", "key:value")
@@ -66,7 +66,7 @@ def _build_engine() -> SentinelEngine:
         embedding_model = os.environ.get("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
         knowledge = ChromaKnowledgeConnector(chroma_path, collection, embedding_model)
     elif knowledge_store == "bedrock":
-        from sentinel.connectors.knowledge.bedrock import BedrockKnowledgeConnector
+        from sentinel_engine.connectors.knowledge.bedrock import BedrockKnowledgeConnector
         kb_id = os.environ["BEDROCK_KB_ID"]
         s3_bucket = os.environ["BEDROCK_S3_BUCKET"]
         s3_prefix = os.environ.get("BEDROCK_S3_PREFIX", "documents/")
@@ -252,7 +252,7 @@ async def list_user_relationships(user_id: str, ctx: Context) -> str:
     Only available when SENTINEL_IDENTITY_STORE=spicedb.
     Useful for auditing permissions and debugging access issues.
     """
-    from sentinel.connectors.identity.spicedb import SpiceDBIdentityConnector
+    from sentinel_engine.connectors.identity.spicedb import SpiceDBIdentityConnector
 
     if not isinstance(engine.identity, SpiceDBIdentityConnector):
         store = os.environ.get("SENTINEL_IDENTITY_STORE", "NOT_SET")
