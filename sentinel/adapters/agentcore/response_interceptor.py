@@ -120,6 +120,7 @@ async def intercept_response(raw_event: dict[str, Any], runtime: Runtime) -> dic
         if event.method == "tools/list":
             return respond(sanitize_tool_list(body), event.response_status)
         if event.method != "tools/call":
+            # initialize, ping, notifications: nothing to authorize, pass through unchanged.
             return respond(body, event.response_status)
         if event.streaming:
             raise PermissionError("streaming tool results cannot be re-checked")
