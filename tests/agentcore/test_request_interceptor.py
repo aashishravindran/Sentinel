@@ -49,8 +49,7 @@ async def test_managed_kb_filter_is_overwritten_never_merged():
     }
     out = await intercept_request(request_event(tool_call(KB_TOOL, smuggled), bearer("intern")), rt)
     arguments = forwarded(out)["params"]["arguments"]
-    assert set(arguments) == {"retrievalQuery", "retrievalConfiguration", "userContext"}
-    assert arguments["userContext"] == {"userId": "intern"}
+    assert set(arguments) == {"retrievalQuery", "retrievalConfiguration"}
     config = arguments["retrievalConfiguration"]["managedSearchConfiguration"]
     assert config["filter"] == {"equals": {"key": "tag_public", "value": True}}
 
@@ -99,3 +98,27 @@ async def test_query_is_bounded_and_n_results_clamped():
 
 async def test_malformed_events_are_denied():
     assert short_circuit(await intercept_request({"mcp": "not-json"}, runtime()))
+
+
+async def test_user_context_comes_from_the_token_when_enabled():
+    rt = runtime()
+    rt.forward_user_context = True
+    smuggled = {"retrievalQuery": {"text": "q"}, "userContext": {"userId": "charlie"}}
+    out = await intercept_request(request_event(tool_call(KB_TOOL, smuggled), bearer("intern")), rt)
+    assert forwarded(out)["params"]["arguments"]["userContext"] == {"userId": "intern"}
+
+
+async def test_every_decision_is_logged_with_the_user_and_their_tags(caplog):
+    caplog.set_level("INFO", logger="sentinel.agentcore.request")
+    call = tool_call(LAMBDA_TOOL, {"query": "budget"})
+    await intercept_request(request_event(call, bearer("alice")), runtime())
+    await intercept_request(request_event(call, bearer("ghost")), runtime())
+    allow, deny = caplog.records
+    assert (allow.decision, allow.user, allow.tags) == ("allow", "alice", ["finance", "public"])
+    assert (deny.decision, deny.user) == ("deny", "ghost")
+    assert "no permissions" in deny.reason
+
+
+async def test_lambda_target_calls_are_denied_up_front_for_tagless_users():
+    call = tool_call(LAMBDA_TOOL, {"query": "budget"})
+    assert short_circuit(await intercept_request(request_event(call, bearer("ghost")), runtime()))

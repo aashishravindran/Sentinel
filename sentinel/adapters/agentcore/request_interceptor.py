@@ -4,8 +4,10 @@
 
 """REQUEST interceptor: rewrite every tool call so the model cannot widen access.
 
-For each ``tools/call`` the caller is taken from the verified bearer token and
-the arguments are rebuilt from scratch. Nothing the model sent survives except
+For each ``tools/call`` the caller is taken from the verified bearer token,
+their tags are resolved live from the identity store (DynamoDB in the CDK
+stack), and the arguments are rebuilt from scratch. Every decision is logged
+with the user and their tags. Nothing the model sent survives except
 the query text, so a model-supplied ``filter``, ``userContext`` or user ID is
 discarded, never merged.
 """
@@ -14,6 +16,7 @@ import logging
 from typing import Any, cast
 
 from sentinel_engine.filters import build_managed_search_config
+from sentinel_engine.principal import Principal
 
 from sentinel.adapters.agentcore.envelope import ENVELOPE_ARGUMENT, seal
 from sentinel.adapters.agentcore.events import GatewayEvent, deny, forward_request, parse
@@ -22,6 +25,7 @@ from sentinel.adapters.agentcore.runtime import Runtime, get_runtime
 logger = logging.getLogger("sentinel.agentcore.request")
 
 PASSTHROUGH_METHODS = frozenset({"initialize", "ping", "tools/list"})
+ALLOWED_TOOLS = frozenset({"secure_search", "Retrieve"})
 MAX_QUERY_CHARS = 2000
 DEFAULT_RESULTS = 5
 MAX_RESULTS = 20
@@ -49,41 +53,52 @@ def _n_results(event: GatewayEvent) -> int:
     return max(1, min(requested, MAX_RESULTS))
 
 
-async def rewrite_arguments(event: GatewayEvent, runtime: Runtime) -> dict[str, Any]:
-    principal = runtime.verifier.verify_authorization_header(event.authorization, "gateway")
+async def rewrite_arguments(
+    event: GatewayEvent, principal: Principal, runtime: Runtime
+) -> tuple[frozenset[str], dict[str, Any]]:
+    """Resolve the caller's tags live and rebuild the tool arguments from them."""
+    if event.tool_name not in ALLOWED_TOOLS:
+        # AgenticRetrieveStream streams past the interceptors; every other tool is unknown.
+        raise PermissionError(f"tool {event.tool_name!r} is not allowed through Sentinel")
+    scope = await runtime.engine.resolve_scope(principal.user_id)
     query, n_results = _query(event), _n_results(event)
 
     if event.tool_name == "secure_search":
         arguments: dict[str, Any] = {"query": query, "n_results": n_results}
         arguments[ENVELOPE_ARGUMENT] = seal(principal.user_id, arguments, runtime.envelope_key)
-        return arguments
+        return scope, arguments
 
-    if event.tool_name == "Retrieve":
-        scope = await runtime.engine.resolve_scope(principal.user_id)
-        return {
-            "retrievalQuery": {"text": query},
-            "retrievalConfiguration": build_managed_search_config(scope, n_results),
-            "userContext": {"userId": principal.user_id},
-        }
-
-    # AgenticRetrieveStream streams past the interceptors; every other tool is unknown.
-    raise PermissionError(f"tool {event.tool_name!r} is not allowed through Sentinel")
+    arguments = {
+        "retrievalQuery": {"text": query},
+        "retrievalConfiguration": build_managed_search_config(scope, n_results),
+    }
+    if runtime.forward_user_context:
+        arguments["userContext"] = {"userId": principal.user_id}
+    return scope, arguments
 
 
 async def intercept_request(raw_event: dict[str, Any], runtime: Runtime) -> dict[str, Any]:
     request_id: object = None
+    audit: dict[str, Any] = {}
     try:
         event = parse(raw_event)
         request_id = event.request_id
         if event.method in PASSTHROUGH_METHODS or event.method.startswith("notifications/"):
             return forward_request(event.request)
+        audit = {"method": event.method, "tool": event.tool_name}
         if event.method != "tools/call":
             raise PermissionError(f"method {event.method!r} is not allowed")
-        arguments = await rewrite_arguments(event, runtime)
+        principal = runtime.verifier.verify_authorization_header(event.authorization, "gateway")
+        audit["user"] = principal.user_id
+        scope, arguments = await rewrite_arguments(event, principal, runtime)
+        logger.info("allow", extra={**audit, "decision": "allow", "tags": sorted(scope)})
         params = {**event.params, "arguments": arguments}
         return forward_request({**event.request, "params": params})
     except Exception as exc:
-        logger.warning("request denied: %s: %s", type(exc).__name__, exc)
+        logger.warning(
+            "deny",
+            extra={**audit, "decision": "deny", "reason": f"{type(exc).__name__}: {exc}"},
+        )
         return deny(request_id)
 
 

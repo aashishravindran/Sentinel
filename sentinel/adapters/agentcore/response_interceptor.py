@@ -63,7 +63,7 @@ def sanitize_tool_list(body: dict[str, Any]) -> dict[str, Any]:
     return {**body, "result": {**result, "tools": tools}}
 
 
-def _authorized_payload(text: str, scope: Set[str]) -> str:
+def _authorized_payload(text: str, scope: Set[str], counts: dict[str, int]) -> str:
     payload = json.loads(text)
     if not isinstance(payload, dict):
         raise ValueError("tool result is not a JSON object")
@@ -72,12 +72,15 @@ def _authorized_payload(text: str, scope: Set[str]) -> str:
     if not lists:
         raise ValueError("tool result has no recognizable result list")
     for key in lists:
+        items = cast(list[Any], payload[key])
         payload[key] = [
             item
-            for item in cast(list[Any], payload[key])
+            for item in items
             if isinstance(item, dict)
             and chunk_authorized(cast(dict[str, Any], item).get("metadata") or {}, scope)
         ]
+        counts["kept"] += len(payload[key])
+        counts["dropped"] += len(items) - len(payload[key])
     return json.dumps(payload)
 
 
@@ -89,12 +92,17 @@ async def recheck_tool_result(
         return body
     principal = runtime.verifier.verify_authorization_header(event.authorization, "gateway")
     scope = await runtime.engine.resolve_scope(principal.user_id)
+    counts = {"kept": 0, "dropped": 0}
     content: list[dict[str, Any]] = []
     for item in result.get("content", []):
         if item.get("type") != "text":
             raise ValueError(f"cannot verify {item.get('type')!r} content")
-        content.append({**item, "text": _authorized_payload(item["text"], scope)})
+        content.append({**item, "text": _authorized_payload(item["text"], scope, counts)})
     result.pop("structuredContent", None)
+    logger.info(
+        "recheck",
+        extra={"tool": event.tool_name, "user": principal.user_id, "tags": sorted(scope), **counts},
+    )
     return {**body, "result": {**result, "content": content}}
 
 
@@ -112,7 +120,7 @@ async def intercept_response(raw_event: dict[str, Any], runtime: Runtime) -> dic
             raise PermissionError("streaming tool results cannot be re-checked")
         return respond(await recheck_tool_result(event, body, runtime), event.response_status)
     except Exception as exc:
-        logger.warning("response denied: %s: %s", type(exc).__name__, exc)
+        logger.warning("deny", extra={"decision": "deny", "reason": f"{type(exc).__name__}: {exc}"})
         return deny(request_id)
 
 

@@ -131,3 +131,12 @@ async def test_errors_from_upstream_pass_through_unchanged():
     }
     out = await intercept_response(response_event(request, error, bearer("alice")), runtime())
     assert response_body(out) == error
+
+
+async def test_recheck_is_logged_with_kept_and_dropped_counts(caplog):
+    caplog.set_level("INFO", logger="sentinel.agentcore.response")
+    request = tool_call(KB_TOOL, {"retrievalQuery": {"text": "q"}})
+    response = tool_result(1, _retrieved("public", "finance"))
+    await intercept_response(response_event(request, response, bearer("intern")), runtime())
+    (record,) = caplog.records
+    assert (record.user, record.tags, record.kept, record.dropped) == ("intern", ["public"], 1, 1)

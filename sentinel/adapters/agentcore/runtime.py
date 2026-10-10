@@ -56,6 +56,8 @@ class Runtime:
     verifier: TokenVerifier
     envelope_key: bytes
     min_relevance_score: float = DEFAULT_MIN_RELEVANCE_SCORE
+    # Send userContext only to KBs with native ACLs; it must also be exposed on the target.
+    forward_user_context: bool = False
     _loop: asyncio.AbstractEventLoop | None = field(default=None, init=False, repr=False)
 
     @classmethod
@@ -72,6 +74,7 @@ class Runtime:
             min_relevance_score=float(
                 env.get("MIN_RELEVANCE_SCORE", str(DEFAULT_MIN_RELEVANCE_SCORE))
             ),
+            forward_user_context=env.get("SENTINEL_KB_USER_CONTEXT", "false").lower() == "true",
         )
 
     def run(self, coro: Coroutine[Any, Any, T]) -> T:
