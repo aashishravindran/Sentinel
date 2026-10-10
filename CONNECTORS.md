@@ -231,7 +231,7 @@ zed --endpoint=localhost:50051 --token=your-token --insecure relationship touch 
 
 **Extra MCP tool (SpiceDB only):**
 
-`list_user_relationships(user_id)` — lists all raw SpiceDB relationship tuples for a user. Useful for auditing and debugging. Returns an error if called against a non-SpiceDB identity store.
+`list_user_relationships(user_id)` (admin only) lists all raw SpiceDB relationship tuples for a user. Useful for auditing and debugging. Returns an error if called against a non-SpiceDB identity store.
 
 ---
 
@@ -349,7 +349,7 @@ Any combination is supported — Sentinel's connector interfaces are fully ortho
 
 ## Implementing a Custom Connector
 
-Implement the abstract base class from `sentinel/core/base.py`:
+Implement the abstract base class from [`sentinel_engine.base`](https://github.com/aashishravindran/sentinel-engine/blob/main/sentinel_engine/base.py):
 
 ```python
 from sentinel_engine.base import IdentityConnector
@@ -376,4 +376,4 @@ class MyKnowledgeConnector(KnowledgeConnector):
         ...
 ```
 
-Wire your connector into `sentinel/main.py` by adding a branch in `_build_engine()`.
+Wire your connector in by adding a branch to `sentinel_engine.factory` (or construct `SentinelEngine(identity, knowledge)` yourself and pass it to `sentinel.adapters.mcp.server.create_server`).

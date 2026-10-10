@@ -34,6 +34,7 @@ Replace `/absolute/path/to/Sentinel` with the actual path to your cloned Sentine
       "args": ["run", "python", "-m", "sentinel.main"],
       "cwd": "/absolute/path/to/Sentinel",
       "env": {
+        "SENTINEL_STDIO_USER": "alice",
         "SENTINEL_IDENTITY_STORE": "sqlite",
         "SQLITE_DB_PATH": "/absolute/path/to/Sentinel/data/permissions.db",
         "SENTINEL_KNOWLEDGE_STORE": "chroma",
@@ -47,13 +48,16 @@ Replace `/absolute/path/to/Sentinel` with the actual path to your cloned Sentine
 }
 ```
 
+> **Why `SENTINEL_STDIO_USER`?** Over stdio, the user is whoever launched the server. The model never gets to say who it is acting for. Without this variable the server refuses to start. For a shared server, use the HTTP transport with OIDC tokens (see the README).
+
 > **Why `cwd`?** MCP clients launch the server process from their own working directory, not yours. Setting `cwd` to the Sentinel repo root ensures `uv` picks up the correct `pyproject.toml` and the `sentinel` module is on the path.
 
 ### 4. Test it
 
-Open your MCP client and try:
-- `secure_search("quarterly revenue", "alice")` — alice has the `finance` tag, so she sees finance docs
-- `secure_search("quarterly revenue", "bob")` — bob only has `engineering` and `public`, so finance docs are denied
+Open your MCP client and ask about quarterly revenue:
+- With `SENTINEL_STDIO_USER=alice` (who holds the `finance` tag), the finance documents come back.
+- Restart with `SENTINEL_STDIO_USER=bob` (who holds `engineering` and `public`), and finance documents are not returned.
+- `what_can_i_access()` shows the tags the current user holds.
 
 ---
 
@@ -315,7 +319,7 @@ The setup script prints `BEDROCK_KB_ID`, `BEDROCK_S3_BUCKET`, and `BEDROCK_DS_ID
 
 **Option C: Instance/task role (EC2, ECS, Lambda)**
 
-Set `IAM_PRINCIPAL_TYPE=role` and pass the role name as `user_id` in `secure_search`. Omit all static AWS auth variables.
+Set `IAM_PRINCIPAL_TYPE=role` and set `SENTINEL_STDIO_USER` to the role name. Omit all static AWS auth variables.
 
 ```json
 {
@@ -396,10 +400,12 @@ python scripts/setup_aws.py --stack sentinel --region us-east-1 --destroy
 
 ## MCP Tools
 
-Once configured, your MCP client exposes three tools:
+Once configured, your MCP client exposes these tools. None of them accepts a user ID; the caller comes from the connection.
 
-| Tool | Description |
-|---|---|
-| `secure_search(query, user_id, n_results=5)` | Search the knowledge base. Returns only documents the user is authorized to see. |
-| `ingest_document(text, access_tags, doc_id, title="")` | Ingest a text document with access control tags. |
-| `ingest_pdf(access_tags, doc_id, pdf_path="", pdf_base64="", title="", metadata={})` | Ingest a PDF page-by-page. Prefer `pdf_path` over `pdf_base64` to avoid MCP message size limits. |
+| Tool | Who | Description |
+|---|---|---|
+| `secure_search(query, n_results=5)` | anyone | Search the knowledge base as the connected user. Returns only documents they may read. |
+| `what_can_i_access()` | anyone | List the connected user's tags. Informational only. |
+| `ingest_document(text, access_tags, doc_id, title="")` | admin | Ingest a text document with access control tags. |
+| `ingest_pdf(access_tags, doc_id, pdf_path="", pdf_base64="", title="", metadata={})` | admin | Ingest a PDF page by page. `pdf_path` is relative to `SENTINEL_INGEST_DIR`; inline PDFs are limited to 1 MB. |
+| `list_user_relationships(user_id)`, `check_config()` | admin | Audit a user's SpiceDB relationships; show configuration with secrets masked. |

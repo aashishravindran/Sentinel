@@ -1,3 +1,5 @@
+> **Historical (v1) design notes.** Current behavior is described in the [README](../README.md), the [ADRs](../docs/adr/) and the [threat model](../docs/threat-model.md). In particular, v2 no longer accepts `user_id` from the model ([ADR 0001](../docs/adr/0001-identity-from-transport.md)).
+
 ## 1. Data Models
 
 ### Identity Schema (SQLite/DDB)

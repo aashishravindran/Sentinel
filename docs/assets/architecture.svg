@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="627" viewBox="0 0 1200 627" font-family="Inter, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <title>Sentinel architecture: one policy engine, two ways in</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <marker id="deny" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#dc2626"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="627" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="60" y="70" font-size="34" font-weight="700" fill="#0f172a">Sentinel</text>
+  <text x="208" y="70" font-size="22" fill="#475569">Your agent only retrieves what its human may read.</text>
+
+  <!-- Agent -->
+  <rect x="60" y="250" width="190" height="120" rx="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <text x="155" y="296" text-anchor="middle" font-size="20" font-weight="600" fill="#0f172a">AI agent</text>
+  <text x="155" y="322" text-anchor="middle" font-size="14" fill="#64748b">Claude · Cursor · your app</text>
+  <text x="155" y="346" text-anchor="middle" font-size="14" fill="#64748b">+ the user's token</text>
+
+  <!-- Spoof attempt -->
+  <text x="155" y="420" text-anchor="middle" font-size="14" fill="#dc2626" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">user_id="ceo"</text>
+  <path d="M155,402 L155,375" stroke="#dc2626" stroke-width="2" stroke-dasharray="5 4" fill="none"/>
+  <text x="155" y="442" text-anchor="middle" font-size="13" fill="#dc2626">rejected: identity comes from the connection</text>
+
+  <!-- Adapter: MCP -->
+  <rect x="330" y="150" width="250" height="110" rx="14" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+  <text x="455" y="190" text-anchor="middle" font-size="19" font-weight="600" fill="#1e3a8a">MCP server</text>
+  <text x="455" y="215" text-anchor="middle" font-size="14" fill="#1e40af">stdio: user who launched it</text>
+  <text x="455" y="237" text-anchor="middle" font-size="14" fill="#1e40af">HTTP: verified JWT sub</text>
+
+  <!-- Adapter: Gateway -->
+  <rect x="330" y="360" width="250" height="130" rx="14" fill="#fff7ed" stroke="#f97316" stroke-width="2"/>
+  <text x="455" y="398" text-anchor="middle" font-size="19" font-weight="600" fill="#7c2d12">AgentCore Gateway</text>
+  <text x="455" y="423" text-anchor="middle" font-size="14" fill="#9a3412">request interceptor: rewrite args</text>
+  <text x="455" y="445" text-anchor="middle" font-size="14" fill="#9a3412">response interceptor: re-check</text>
+  <text x="455" y="467" text-anchor="middle" font-size="14" fill="#9a3412">every chunk</text>
+
+  <path d="M250,290 C290,290 290,205 326,205" stroke="#475569" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <path d="M250,330 C290,330 290,425 326,425" stroke="#475569" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- Engine -->
+  <rect x="660" y="230" width="230" height="170" rx="16" fill="#0f172a"/>
+  <text x="775" y="272" text-anchor="middle" font-size="20" font-weight="700" fill="#ffffff">sentinel-engine</text>
+  <text x="775" y="296" text-anchor="middle" font-size="13" fill="#94a3b8">policy decision point</text>
+  <text x="775" y="326" text-anchor="middle" font-size="14" fill="#e2e8f0">resolve scope, live</text>
+  <text x="775" y="348" text-anchor="middle" font-size="14" fill="#e2e8f0">build the filter</text>
+  <text x="775" y="370" text-anchor="middle" font-size="14" fill="#e2e8f0">fail closed</text>
+
+  <path d="M580,205 C620,205 620,280 656,280" stroke="#475569" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <path d="M580,425 C620,425 620,350 656,350" stroke="#475569" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- Stores -->
+  <rect x="970" y="160" width="190" height="110" rx="14" fill="#f0fdf4" stroke="#22c55e" stroke-width="2"/>
+  <text x="1065" y="198" text-anchor="middle" font-size="18" font-weight="600" fill="#14532d">Identity</text>
+  <text x="1065" y="222" text-anchor="middle" font-size="14" fill="#166534">SpiceDB · DynamoDB</text>
+  <text x="1065" y="244" text-anchor="middle" font-size="14" fill="#166534">SQLite · IAM</text>
+
+  <rect x="970" y="360" width="190" height="110" rx="14" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="1065" y="398" text-anchor="middle" font-size="18" font-weight="600" fill="#3b0764">Knowledge</text>
+  <text x="1065" y="422" text-anchor="middle" font-size="14" fill="#5b21b6">Bedrock KB · Managed KB</text>
+  <text x="1065" y="444" text-anchor="middle" font-size="14" fill="#5b21b6">ChromaDB</text>
+
+  <path d="M890,280 C930,280 930,215 966,215" stroke="#475569" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <text x="928" y="232" text-anchor="middle" font-size="12" fill="#64748b">tags</text>
+  <path d="M890,350 C930,350 930,415 966,415" stroke="#475569" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <text x="928" y="402" text-anchor="middle" font-size="12" fill="#64748b">filtered</text>
+  <text x="928" y="416" text-anchor="middle" font-size="12" fill="#64748b">query</text>
+
+  <!-- Footer stats -->
+  <line x1="60" y1="530" x2="1140" y2="530" stroke="#e2e8f0" stroke-width="2"/>
+  <text x="60" y="574" font-size="26" font-weight="700" fill="#0f172a">0 leaks</text>
+  <text x="60" y="598" font-size="14" fill="#64748b">in 1,728 adversarial attempts, 4 entry points</text>
+  <text x="430" y="574" font-size="26" font-weight="700" fill="#0f172a">1.00 vs 0.10</text>
+  <text x="430" y="598" font-size="14" fill="#64748b">recall@5: in-query filter vs post-filter, 10 teams</text>
+  <text x="820" y="574" font-size="26" font-weight="700" fill="#0f172a">~0.17 ms</text>
+  <text x="820" y="598" font-size="14" fill="#64748b">Sentinel's own overhead per Gateway call (p50)</text>
+</svg>
