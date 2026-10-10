@@ -1,0 +1,10 @@
+{
+  "description": "Demo org: who holds which access tags. Admins hold sentinel_admin, which grants no document access.",
+  "users": {
+    "alice": ["finance", "public"],
+    "bob": ["engineering", "public"],
+    "charlie": ["finance", "engineering", "public"],
+    "intern": ["public"],
+    "root": ["sentinel_admin"]
+  }
+}

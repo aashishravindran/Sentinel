@@ -40,8 +40,17 @@ zed ${ZED_FLAGS} relationship touch tag:finance     member user:charlie
 zed ${ZED_FLAGS} relationship touch tag:engineering member user:charlie
 zed ${ZED_FLAGS} relationship touch tag:public      member user:charlie
 
+# intern — public, inherited through team:interns rather than granted directly
+zed ${ZED_FLAGS} relationship touch team:interns member user:intern
+zed ${ZED_FLAGS} relationship touch tag:public   member team:interns#member
+
+# root   — Sentinel admin (ingest, config, audit); holds no document tags
+zed ${ZED_FLAGS} relationship touch platform:sentinel admin user:root
+
 echo ""
 echo "Done. Users seeded:"
 echo "  alice   -> finance, public"
 echo "  bob     -> public, engineering"
 echo "  charlie -> finance, engineering, public"
+echo "  intern  -> public (via team:interns)"
+echo "  root    -> admin of platform:sentinel"

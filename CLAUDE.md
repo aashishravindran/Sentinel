@@ -4,35 +4,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Sentinel is a Python MCP (Model Context Protocol) server implementing **Attribute-Based Access Control (ABAC)** as middleware for RAG pipelines. It supports two backend configurations: local (SQLite + ChromaDB) and AWS (DynamoDB + Bedrock Knowledge Bases with hybrid search and optional reranking). It enforces zero-trust access control by matching user tags to document tags before returning search results.
+Sentinel makes AI agents retrieve only what their human may read. Two adapters, the MCP
+server and AgentCore Gateway interceptors, share one policy engine from
+github.com/aashishravindran/sentinel-engine (package `sentinel_engine`, pinned by tag in
+`[tool.uv.sources]`; point it at a local path to develop both together). Identity always comes from the transport
+(stdio launcher or verified JWT `sub`), never from tool arguments; permissions are resolved
+live (SpiceDB, DynamoDB, SQLite, IAM) and pushed into the vector query as a filter.
 
-For detailed project structure, tech stack, and conventions, see `.claude/skills/project-structure.md`.
+See `.claude/skills/project-structure.md` for the layout and conventions.
 
 ## Commands
 
 ```bash
-# Install dependencies
-uv sync
-
-# Run the MCP server
-python -m sentinel.main
-
-# Run tests
-uv run pytest
-
-# Run a single test
-uv run pytest tests/path/to/test_file.py::test_name
+uv sync                                              # sentinel-engine from its git tag
+SENTINEL_STDIO_USER=alice SENTINEL_IDENTITY_STORE=sqlite SENTINEL_KNOWLEDGE_STORE=chroma \
+  uv run python -m sentinel.main                     # MCP server (stdio)
+uv run python -m demo.run_demo                       # local end-to-end demo
+uv run pytest -m "not e2e and not aws and not load"  # unit, conformance, red team
+uv run ruff check . && uv run pyright                # lint, strict types
+./scripts/build_lambda.sh && (cd infra/cdk && npm test && npx cdk synth -c knowledgeBaseId=X -c knowledgeBaseKind=standard)
 ```
 
 ## Key Security Principles
 
-- **Zero Trust / Fail-Closed:** No tags = access denied. Never assumes global access.
-- **Stateless:** No user data cached between sessions.
-- **OR Policy:** User must possess at least one tag matching the document's `access_tags`.
+- **Identity from the transport:** no tool accepts a user ID; `sub` is the user, `client_id` never is.
+- **Fail closed:** no tags, identity errors, bad tokens and unparseable results all deny.
+- **Live scope:** nothing cached; revocation applies on the next call.
+- **Filter in the query, then re-check:** one filter builder for every store; results post-filtered.
 
 ## Design Documents
 
-Full design context lives in `Design/`:
+Current design: `docs/adr/`, `docs/threat-model.md`, `docs/benchmarks.md`. Historical v1 notes in `Design/`:
 - `Architecture.md.md` — system components, connector architecture, search pipeline diagrams
 - `Design.md.md` — data models, security principles, connector contracts
 - `Project Structure.md.md` — file layout with annotations
@@ -42,3 +44,9 @@ Full design context lives in `Design/`:
 
 ### 2026-03-21
 Added AWS backend support: DynamoDB identity connector, Bedrock Knowledge Bases connector with hybrid search (dense + BM25) and optional reranking, PDF ingestion via pypdf, and AWS infrastructure provisioning script. Updated architecture docs and added QUICKSTART.md with setup guides for both local and AWS configurations.
+
+### 2026-10-09
+Sentinel v2: identity bound to the transport (v1 trusted a model-supplied `user_id`); engine
+and connectors extracted to `sentinel-engine`; admin tools role-gated; SpiceDB team
+inheritance; AgentCore Gateway adapter (interceptors, Lambda target, principal envelope) with
+a TypeScript CDK construct; conformance, red-team and benchmark suites; ADRs and threat model.

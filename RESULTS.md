@@ -117,7 +117,7 @@ The Internal 2026 Roadmap is tagged `[finance, engineering]`. Under OR policy, b
 
 **Symptom:** When a user had access to documents but none were relevant to their query, ChromaDB returned the closest matches anyway (e.g. public handbook for a finance query). The LLM then hallucinated answers based on these low-signal results.
 
-**Fix:** Added `MIN_RELEVANCE_SCORE=0.25` threshold in `main.py`. Results below the threshold are discarded. If nothing passes, Sentinel returns a clear "you do not have access" message. Threshold is configurable via env var.
+**Fix:** Added `MIN_RELEVANCE_SCORE=0.25` threshold (now `sentinel_engine.results`). Results below the threshold are discarded. If nothing passes, Sentinel returns a clear "you do not have access" message. Threshold is configurable via env var.
 
 ---
 

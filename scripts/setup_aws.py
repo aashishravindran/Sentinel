@@ -33,10 +33,12 @@ import argparse
 import json
 import sys
 import time
+
 from dotenv import load_dotenv
+
 load_dotenv()  # pick up AWS_PROFILE / AWS_ACCESS_KEY_ID etc. from .env if present
 
-import boto3
+import boto3  # noqa: E402  (credentials must be loaded first)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -52,6 +54,7 @@ METADATA_FIELD = "AMAZON_BEDROCK_METADATA"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def log(msg: str) -> None:
     print(f"    {msg}", flush=True)
 
@@ -65,6 +68,7 @@ def wait_dots(seconds: int, label: str) -> None:
 
 
 # ── 1. DynamoDB ───────────────────────────────────────────────────────────────
+
 
 def create_ddb_table(client, table_name: str) -> None:
     try:
@@ -89,6 +93,7 @@ def delete_ddb_table(client, table_name: str) -> None:
 
 
 # ── 2. S3 ─────────────────────────────────────────────────────────────────────
+
 
 def create_s3_bucket(client, bucket_name: str, region: str) -> None:
     try:
@@ -129,6 +134,7 @@ def delete_s3_bucket(client, bucket_name: str) -> None:
 
 # ── 3. IAM ────────────────────────────────────────────────────────────────────
 
+
 def _inline_policy(bucket_name: str, region: str, account_id: str) -> dict:
     return {
         "Version": "2012-10-17",
@@ -146,9 +152,7 @@ def _inline_policy(bucket_name: str, region: str, account_id: str) -> dict:
                 "Sid": "BedrockEmbed",
                 "Effect": "Allow",
                 "Action": "bedrock:InvokeModel",
-                "Resource": (
-                    f"arn:aws:bedrock:{region}::foundation-model/{EMBED_MODEL_ID}"
-                ),
+                "Resource": (f"arn:aws:bedrock:{region}::foundation-model/{EMBED_MODEL_ID}"),
             },
             {
                 "Sid": "AOSSAccess",
@@ -168,9 +172,7 @@ def create_iam_role(client, role_name: str, bucket_name: str, region: str, accou
                 "Effect": "Allow",
                 "Principal": {"Service": "bedrock.amazonaws.com"},
                 "Action": "sts:AssumeRole",
-                "Condition": {
-                    "StringEquals": {"aws:SourceAccount": account_id}
-                },
+                "Condition": {"StringEquals": {"aws:SourceAccount": account_id}},
             }
         ],
     }
@@ -209,6 +211,7 @@ def delete_iam_role(client, role_name: str) -> None:
 
 # ── 4. OpenSearch Serverless collection ───────────────────────────────────────
 
+
 def create_aoss_collection(
     client, name: str, role_arn: str, region: str, account_id: str, caller_arn: str
 ) -> tuple[str, str]:
@@ -221,47 +224,60 @@ def create_aoss_collection(
       - Network:    public endpoint (required for Bedrock KB to reach the collection)
       - Data access: grants the Bedrock role + the caller full index CRUD rights
     """
-    enc_policy = json.dumps({
-        "Rules": [{"ResourceType": "collection", "Resource": [f"collection/{name}"]}],
-        "AWSOwnedKey": True,
-    })
+    enc_policy = json.dumps(
+        {
+            "Rules": [{"ResourceType": "collection", "Resource": [f"collection/{name}"]}],
+            "AWSOwnedKey": True,
+        }
+    )
     _try_create_aoss_policy(client, "security", "encryption", f"{name}-enc", enc_policy)
 
-    net_policy = json.dumps([{
-        "Rules": [
-            {"ResourceType": "collection", "Resource": [f"collection/{name}"]},
-            {"ResourceType": "dashboard",  "Resource": [f"collection/{name}"]},
-        ],
-        "AllowFromPublic": True,
-    }])
+    net_policy = json.dumps(
+        [
+            {
+                "Rules": [
+                    {"ResourceType": "collection", "Resource": [f"collection/{name}"]},
+                    {"ResourceType": "dashboard", "Resource": [f"collection/{name}"]},
+                ],
+                "AllowFromPublic": True,
+            }
+        ]
+    )
     _try_create_aoss_policy(client, "security", "network", f"{name}-net", net_policy)
 
     # Grant both the Bedrock KB role and the script caller index + collection rights.
-    data_policy = json.dumps([{
-        "Rules": [
+    data_policy = json.dumps(
+        [
             {
-                "ResourceType": "index",
-                "Resource": [f"index/{name}/*"],
-                "Permission": [
-                    "aoss:CreateIndex", "aoss:DeleteIndex",
-                    "aoss:UpdateIndex", "aoss:DescribeIndex",
-                    "aoss:ReadDocument", "aoss:WriteDocument",
+                "Rules": [
+                    {
+                        "ResourceType": "index",
+                        "Resource": [f"index/{name}/*"],
+                        "Permission": [
+                            "aoss:CreateIndex",
+                            "aoss:DeleteIndex",
+                            "aoss:UpdateIndex",
+                            "aoss:DescribeIndex",
+                            "aoss:ReadDocument",
+                            "aoss:WriteDocument",
+                        ],
+                    },
+                    {
+                        "ResourceType": "collection",
+                        "Resource": [f"collection/{name}"],
+                        "Permission": [
+                            "aoss:CreateCollectionItems",
+                            "aoss:DescribeCollectionItems",
+                        ],
+                    },
                 ],
-            },
-            {
-                "ResourceType": "collection",
-                "Resource": [f"collection/{name}"],
-                "Permission": [
-                    "aoss:CreateCollectionItems",
-                    "aoss:DescribeCollectionItems",
+                "Principal": [
+                    role_arn,
+                    caller_arn,  # exact ARN of the IAM user/role running this script
                 ],
-            },
-        ],
-        "Principal": [
-            role_arn,
-            caller_arn,  # exact ARN of the IAM user/role running this script
-        ],
-    }])
+            }
+        ]
+    )
     _try_create_aoss_policy(client, "access", "data", f"{name}-access", data_policy)
 
     # Create the collection.
@@ -296,11 +312,15 @@ def _try_create_aoss_policy(client, kind: str, policy_type: str, name: str, poli
             if kind == "security":
                 existing = client.get_security_policy(name=name, type=policy_type)
                 version = existing["securityPolicyDetail"]["policyVersion"]
-                client.update_security_policy(name=name, type=policy_type, policy=policy, policyVersion=version)
+                client.update_security_policy(
+                    name=name, type=policy_type, policy=policy, policyVersion=version
+                )
             else:
                 existing = client.get_access_policy(name=name, type=policy_type)
                 version = existing["accessPolicyDetail"]["policyVersion"]
-                client.update_access_policy(name=name, type=policy_type, policy=policy, policyVersion=version)
+                client.update_access_policy(
+                    name=name, type=policy_type, policy=policy, policyVersion=version
+                )
             log(f"Updated AOSS {policy_type} policy: {name}")
         except Exception as e:
             log(f"Warning: could not update AOSS {policy_type} policy: {e}")
@@ -336,8 +356,8 @@ def delete_aoss_collection(client, name: str) -> None:
 
     for kind, policy_type, suffix in [
         ("security", "encryption", "-enc"),
-        ("security", "network",    "-net"),
-        ("access",   "data",       "-access"),
+        ("security", "network", "-net"),
+        ("access", "data", "-access"),
     ]:
         try:
             if kind == "security":
@@ -350,6 +370,7 @@ def delete_aoss_collection(client, name: str) -> None:
 
 
 # ── 5. AOSS vector index ──────────────────────────────────────────────────────
+
 
 def create_aoss_index(endpoint: str, index_name: str, region: str, session: boto3.Session) -> None:
     """
@@ -387,7 +408,7 @@ def create_aoss_index(endpoint: str, index_name: str, region: str, session: boto
                         "parameters": {"m": 16, "ef_construction": 512},
                     },
                 },
-                TEXT_FIELD:     {"type": "text", "index": True},
+                TEXT_FIELD: {"type": "text", "index": True},
                 METADATA_FIELD: {"type": "text", "index": False},
             }
         },
@@ -418,9 +439,14 @@ def create_aoss_index(endpoint: str, index_name: str, region: str, session: boto
 
 # ── 6. Bedrock Knowledge Base ─────────────────────────────────────────────────
 
+
 def create_bedrock_kb(
-    client, kb_name: str, role_arn: str,
-    collection_arn: str, index_name: str, region: str,
+    client,
+    kb_name: str,
+    role_arn: str,
+    collection_arn: str,
+    index_name: str,
+    region: str,
 ) -> str:
     try:
         resp = client.create_knowledge_base(
@@ -440,8 +466,8 @@ def create_bedrock_kb(
                     "collectionArn": collection_arn,
                     "vectorIndexName": index_name,
                     "fieldMapping": {
-                        "vectorField":   VECTOR_FIELD,
-                        "textField":     TEXT_FIELD,
+                        "vectorField": VECTOR_FIELD,
+                        "textField": TEXT_FIELD,
                         "metadataField": METADATA_FIELD,
                     },
                 },
@@ -466,6 +492,7 @@ def _find_kb_by_name(client, kb_name: str) -> str:
 
 
 # ── 7. S3 data source ─────────────────────────────────────────────────────────
+
 
 def create_bedrock_data_source(
     client, kb_id: str, ds_name: str, bucket_name: str, s3_prefix: str
@@ -529,43 +556,44 @@ def delete_bedrock_kb(client, kb_name: str) -> None:
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Provision (or destroy) Sentinel AWS infrastructure.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--stack",       default="sentinel",   help="Name prefix for all AWS resources")
-    p.add_argument("--region",      default="us-east-1",  help="AWS region")
-    p.add_argument("--s3-prefix",   default="documents/", help="S3 key prefix for KB documents")
-    p.add_argument("--start-from",  type=int, default=1,  help="Skip to this step (1-7)")
-    p.add_argument("--destroy",     action="store_true",  help="Tear down all resources")
+    p.add_argument("--stack", default="sentinel", help="Name prefix for all AWS resources")
+    p.add_argument("--region", default="us-east-1", help="AWS region")
+    p.add_argument("--s3-prefix", default="documents/", help="S3 key prefix for KB documents")
+    p.add_argument("--start-from", type=int, default=1, help="Skip to this step (1-7)")
+    p.add_argument("--destroy", action="store_true", help="Tear down all resources")
     return p.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    stack     = args.stack
-    region    = args.region
+    stack = args.stack
+    region = args.region
     s3_prefix = args.s3_prefix.rstrip("/") + "/"
 
     # Derive all resource names from the stack prefix.
-    ddb_table       = f"{stack}-identity"
-    bucket_name     = f"{stack}-kb-docs"
-    role_name       = f"{stack}-bedrock-role"
+    ddb_table = f"{stack}-identity"
+    bucket_name = f"{stack}-kb-docs"
+    role_name = f"{stack}-bedrock-role"
     collection_name = f"{stack}-kb"
-    index_name      = f"{stack}-index"
-    kb_name         = f"{stack}-kb"
-    ds_name         = f"{stack}-s3-source"
+    index_name = f"{stack}-index"
+    kb_name = f"{stack}-kb"
+    ds_name = f"{stack}-s3-source"
 
-    session     = boto3.Session(region_name=region)
-    caller      = session.client("sts").get_caller_identity()
-    account_id  = caller["Account"]
-    caller_arn  = caller["Arn"]
+    session = boto3.Session(region_name=region)
+    caller = session.client("sts").get_caller_identity()
+    account_id = caller["Account"]
+    caller_arn = caller["Arn"]
 
-    ddb     = session.client("dynamodb")
-    s3      = session.client("s3")
-    iam     = session.client("iam")
-    aoss    = session.client("opensearchserverless")
+    ddb = session.client("dynamodb")
+    s3 = session.client("s3")
+    iam = session.client("iam")
+    aoss = session.client("opensearchserverless")
     bedrock = session.client("bedrock-agent")
 
     # ── Destroy path ──────────────────────────────────────────────────────────
@@ -631,7 +659,9 @@ def main() -> None:
         print("7/7  S3 data source")
         ds_id = create_bedrock_data_source(bedrock, kb_id, ds_name, bucket_name, s3_prefix)
     else:
-        ds_id = bedrock.list_data_sources(knowledgeBaseId=kb_id)["dataSourceSummaries"][0]["dataSourceId"]
+        ds_id = bedrock.list_data_sources(knowledgeBaseId=kb_id)["dataSourceSummaries"][0][
+            "dataSourceId"
+        ]
 
     # ── Output ────────────────────────────────────────────────────────────────
     rerank_arn = f"arn:aws:bedrock:{region}::foundation-model/amazon.rerank-v1:0"

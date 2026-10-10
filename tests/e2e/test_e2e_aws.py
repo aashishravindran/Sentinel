@@ -14,7 +14,7 @@ Assumes the DynamoDB table contains at least:
 Run with:
     uv run pytest -m e2e tests/e2e/test_e2e_aws.py -v
 
-Note: Bedrock KB sync after ingest can take 1–5 minutes, so these tests
+Note: Bedrock KB sync after ingest can take 1-5 minutes, so these tests
 verify the search pipeline works end-to-end without asserting on specific
 ingested content.
 """
@@ -23,17 +23,16 @@ import os
 
 import pytest
 import pytest_asyncio
-
-from sentinel.connectors.identity.ddb import DynamoDBIdentityConnector
-from sentinel.connectors.knowledge.bedrock import BedrockKnowledgeConnector
-from sentinel.core.engine import AccessDeniedError, SentinelEngine
+from sentinel_engine.connectors.identity.ddb import DynamoDBIdentityConnector
+from sentinel_engine.connectors.knowledge.bedrock import BedrockKnowledgeConnector
+from sentinel_engine.engine import AccessDeniedError, SentinelEngine
 
 from tests.e2e.conftest import requires_aws
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest_asyncio.fixture(scope="module")
 async def ddb():
@@ -65,6 +64,7 @@ async def engine(ddb, bedrock):
 # DynamoDB identity tests
 # ---------------------------------------------------------------------------
 
+
 @requires_aws
 @pytest.mark.e2e
 @pytest.mark.asyncio
@@ -94,6 +94,7 @@ async def test_ddb_unknown_user_returns_empty(ddb):
 # ---------------------------------------------------------------------------
 # Full engine pipeline tests (DynamoDB + Bedrock)
 # ---------------------------------------------------------------------------
+
 
 @requires_aws
 @pytest.mark.e2e

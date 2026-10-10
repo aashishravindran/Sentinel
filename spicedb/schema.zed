@@ -1,21 +1,32 @@
 /**
  * Sentinel RAG — SpiceDB schema
  *
- * Each "tag" resource represents an access-control label (e.g. "finance",
- * "engineering").  Users are granted access to a tag by being added as a
- * `member` of that tag object.
- *
- * The Sentinel connector calls LookupResources asking:
+ * A "tag" is an access-control label stamped on documents at ingest
+ * ("finance", "engineering"). Sentinel asks SpiceDB, on every search:
  *   "which tag objects does user:<id> have `access` on?"
- * and returns the matching object IDs as the user's permission set.
+ * and pushes the answer into the retrieval filter.
+ *
+ * Access can be granted directly (tag:finance#member@user:alice) or through
+ * teams, which may nest (tag:public#member@team:interns#member). Removing a
+ * user from a team revokes access on their next search: nothing is cached.
  */
 
 definition user {}
 
+definition team {
+    relation member: user | team#member
+}
+
 definition tag {
-    /** member: users who hold this tag */
-    relation member: user
+    /** member: users, or members of a team, who hold this tag */
+    relation member: user | team#member
 
     /** access: the permission Sentinel checks via LookupResources */
     permission access = member
+}
+
+/** platform:sentinel — who may ingest documents and audit permissions */
+definition platform {
+    relation admin: user
+    permission administer = admin
 }

@@ -17,3 +17,4 @@ data/*
 
 # Model cache
 .cache/
+build/

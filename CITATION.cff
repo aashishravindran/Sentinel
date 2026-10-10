@@ -12,8 +12,8 @@ abstract: >
   It enforces zero-trust, fail-closed access control by performing a
   real-time Permission Handshake between the LLM and the knowledge base,
   inspired by the ReBAC principles of Google's Zanzibar system.
-date-released: "2026-03-22"
-version: "0.1.0"
+date-released: "2026-10-09"
+version: "0.2.0"
 license: "Elastic-2.0"
 url: "https://github.com/aashishravindran/Sentinel"
 keywords:

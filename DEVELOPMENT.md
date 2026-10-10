@@ -6,7 +6,7 @@ This guide covers everything needed to extend Sentinel with custom connectors: i
 
 ## Extending Sentinel: Custom Connectors
 
-Sentinel is built to be extensible. You can plug in any Identity Provider or Vector Knowledge Base by implementing two small abstract interfaces. No changes to the engine or MCP layer are required — only a new file and a branch in `_build_engine()`.
+Sentinel is built to be extensible. You can plug in any Identity Provider or Vector Knowledge Base by implementing two small abstract interfaces. Connectors live in [sentinel-engine](https://github.com/aashishravindran/sentinel-engine): add a file there and a branch in `sentinel_engine/factory.py`. Neither adapter needs changes. Use the reserved helpers in `sentinel_engine.filters` and `sentinel_engine.ingest.stamp` so your connector filters and stamps tags exactly like the built-in ones.
 
 ---
 
@@ -15,9 +15,9 @@ Sentinel is built to be extensible. You can plug in any Identity Provider or Vec
 The `IdentityConnector` is responsible for the **Permission Handshake**. It fetches the authoritative set of tags for a user from whatever source of truth you use (Okta, Auth0, a custom SQL table, an in-house IAM service, etc.).
 
 ```python
-# sentinel/connectors/identity/my_provider.py
+# sentinel-engine: sentinel_engine/connectors/identity/my_provider.py
 
-from sentinel.core.base import IdentityConnector
+from sentinel_engine.base import IdentityConnector
 
 
 class MyCustomIdentity(IdentityConnector):
@@ -55,18 +55,16 @@ class MyCustomIdentity(IdentityConnector):
 The `KnowledgeConnector` handles **Enforcement**. It translates the user's tags into a database-native metadata filter and executes the search. It also handles document ingestion with those same tags attached.
 
 ```python
-# sentinel/connectors/knowledge/my_store.py
+# sentinel-engine: sentinel_engine/connectors/knowledge/my_store.py
 
-from sentinel.core.base import KnowledgeConnector
+from sentinel_engine.base import KnowledgeConnector
 
 
 class MyCustomVectorStore(KnowledgeConnector):
     def __init__(self, db_url: str, api_key: str):
         self.client = MyVectorClient(db_url, api_key)
 
-    async def search(
-        self, query: str, tags: set[str], n_results: int = 5
-    ) -> list[dict]:
+    async def search(self, query: str, tags: set[str], n_results: int = 5) -> list[dict]:
         """
         Execute a tag-filtered vector search.
 
@@ -87,10 +85,7 @@ class MyCustomVectorStore(KnowledgeConnector):
             filter=tag_filter,
             limit=n_results,
         )
-        return [
-            {"text": r.content, "metadata": r.metadata, "score": r.score}
-            for r in raw
-        ]
+        return [{"text": r.content, "metadata": r.metadata, "score": r.score} for r in raw]
 
     async def ingest(
         self,
@@ -123,39 +118,20 @@ class MyCustomVectorStore(KnowledgeConnector):
 
 ### 3. Wiring It Up
 
-Add your connector to `_build_engine()` in `sentinel/main.py`:
+Add a branch to `build_identity_from_env()` or `build_knowledge_from_env()` in `sentinel_engine/factory.py`. Import lazily so deployments only need the extras they use:
 
 ```python
-def _build_engine() -> SentinelEngine:
-    identity_store = os.environ.get("SENTINEL_IDENTITY_STORE", "NOT_SET")
-    knowledge_store = os.environ.get("SENTINEL_KNOWLEDGE_STORE", "NOT_SET")
+def build_identity_from_env(env: Mapping[str, str] = os.environ) -> IdentityConnector:
+    store = env.get("SENTINEL_IDENTITY_STORE", "")
+    ...
+    if store == "my_provider":
+        from sentinel_engine.connectors.identity.my_provider import MyCustomIdentity
 
-    # --- Identity ---
-    if identity_store == "sqlite":
-        ...
-    elif identity_store == "my_provider":
-        from sentinel.connectors.identity.my_provider import MyCustomIdentity
-        identity = MyCustomIdentity(
-            api_url=os.environ["MY_PROVIDER_URL"],
-            api_key=os.environ["MY_PROVIDER_KEY"],
-        )
-    else:
-        raise ValueError(f"Unsupported identity store: '{identity_store}'")
-
-    # --- Knowledge ---
-    if knowledge_store == "chroma":
-        ...
-    elif knowledge_store == "my_store":
-        from sentinel.connectors.knowledge.my_store import MyCustomVectorStore
-        knowledge = MyCustomVectorStore(
-            db_url=os.environ["MY_STORE_URL"],
-            api_key=os.environ["MY_STORE_KEY"],
-        )
-    else:
-        raise ValueError(f"Unsupported knowledge store: '{knowledge_store}'")
-
-    return SentinelEngine(identity, knowledge)
+        return MyCustomIdentity(api_url=env["MY_PROVIDER_URL"], api_key=env["MY_PROVIDER_KEY"])
+    raise ConfigError(f"unsupported SENTINEL_IDENTITY_STORE: {store!r}")
 ```
+
+For a one-off integration you can skip the factory: build `SentinelEngine(identity, knowledge)` yourself and pass it to `sentinel.adapters.mcp.server.create_server(engine, ServerSettings.from_env())`.
 
 Then set the env vars in your MCP config:
 
@@ -193,7 +169,7 @@ Mock your external API and verify the two critical behaviours: known users retur
 
 from unittest.mock import AsyncMock, patch
 import pytest
-from sentinel.connectors.identity.my_provider import MyCustomIdentity
+from sentinel_engine.connectors.identity.my_provider import MyCustomIdentity
 
 
 @pytest.fixture
@@ -234,7 +210,7 @@ Test the search filter logic and the ingestion path. Mock the underlying vector 
 
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
-from sentinel.connectors.knowledge.my_store import MyCustomVectorStore
+from sentinel_engine.connectors.knowledge.my_store import MyCustomVectorStore
 
 
 @pytest.fixture
@@ -293,9 +269,9 @@ import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock
 
-from sentinel.core.engine import SentinelEngine, AccessDeniedError
-from sentinel.connectors.identity.my_provider import MyCustomIdentity
-from sentinel.connectors.knowledge.my_store import MyCustomVectorStore
+from sentinel_engine.engine import SentinelEngine, AccessDeniedError
+from sentinel_engine.connectors.identity.my_provider import MyCustomIdentity
+from sentinel_engine.connectors.knowledge.my_store import MyCustomVectorStore
 
 
 @pytest_asyncio.fixture
@@ -304,14 +280,16 @@ async def engine():
     knowledge = MyCustomVectorStore(db_url="https://fake", api_key="key")
 
     # Wire in fixed responses so tests are deterministic
-    identity.get_tags = AsyncMock(side_effect=lambda uid: {
-        "alice": {"finance", "public"},
-        "bob":   {"engineering"},
-    }.get(uid, set()))
+    identity.get_tags = AsyncMock(
+        side_effect=lambda uid: {
+            "alice": {"finance", "public"},
+            "bob": {"engineering"},
+        }.get(uid, set())
+    )
 
-    knowledge.search = AsyncMock(return_value=[
-        {"text": "Budget doc", "metadata": {"access_tags": "finance"}, "score": 0.9}
-    ])
+    knowledge.search = AsyncMock(
+        return_value=[{"text": "Budget doc", "metadata": {"access_tags": "finance"}, "score": 0.9}]
+    )
 
     return SentinelEngine(identity, knowledge)
 
@@ -350,8 +328,8 @@ import os
 import pytest
 import pytest_asyncio
 
-from sentinel.connectors.identity.my_provider import MyCustomIdentity
-from sentinel.core.engine import AccessDeniedError, SentinelEngine
+from sentinel_engine.connectors.identity.my_provider import MyCustomIdentity
+from sentinel_engine.engine import AccessDeniedError, SentinelEngine
 
 requires_my_provider = pytest.mark.skipif(
     not os.environ.get("MY_PROVIDER_URL"),
@@ -409,7 +387,7 @@ MY_PROVIDER_URL=https://... MY_PROVIDER_KEY=... uv run pytest -m e2e
 ## Project Layout for New Connectors
 
 ```
-sentinel/connectors/
+sentinel-engine/sentinel_engine/connectors/
 ├── identity/
 │   ├── sqlite.py          # reference: minimal sync-style connector
 │   ├── ddb.py             # reference: AWS async connector

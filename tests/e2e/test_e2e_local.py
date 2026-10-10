@@ -13,10 +13,9 @@ Run with:
 
 import pytest
 import pytest_asyncio
-
-from sentinel.connectors.identity.spicedb import SpiceDBIdentityConnector
-from sentinel.connectors.knowledge.chroma import ChromaKnowledgeConnector
-from sentinel.core.engine import AccessDeniedError, SentinelEngine
+from sentinel_engine.connectors.identity.spicedb import SpiceDBIdentityConnector
+from sentinel_engine.connectors.knowledge.chroma import ChromaKnowledgeConnector
+from sentinel_engine.engine import AccessDeniedError, SentinelEngine
 
 from tests.e2e.conftest import requires_spicedb
 
@@ -28,15 +27,16 @@ SPICEDB_ENDPOINT = "localhost:50051"
 SPICEDB_TOKEN = "sentinel-local"
 
 SEED_DOCS = [
-    ("e2e_public_overview",  "Company overview open to all staff.",             ["public"]),
-    ("e2e_finance_budget",   "2026 budget: $88.9M total opex planned.",         ["finance"]),
-    ("e2e_eng_runbook",      "On-call runbook: check Grafana dashboard first.", ["engineering"]),
-    ("e2e_internal_roadmap", "Roadmap: Series D in Q3, AI pod in Q1.",          ["finance", "engineering"]),
+    ("e2e_public_overview", "Company overview open to all staff.", ["public"]),
+    ("e2e_finance_budget", "2026 budget: $88.9M total opex planned.", ["finance"]),
+    ("e2e_eng_runbook", "On-call runbook: check Grafana dashboard first.", ["engineering"]),
+    ("e2e_internal_roadmap", "Roadmap: Series D in Q3, AI pod in Q1.", ["finance", "engineering"]),
 ]
 
 # ---------------------------------------------------------------------------
 # Module-scoped fixtures (embedding model loaded once per test session)
 # ---------------------------------------------------------------------------
+
 
 @pytest_asyncio.fixture(scope="module")
 async def spicedb():
@@ -63,6 +63,7 @@ async def engine(spicedb, chroma):
 # ---------------------------------------------------------------------------
 # SpiceDB identity connector tests
 # ---------------------------------------------------------------------------
+
 
 @requires_spicedb
 @pytest.mark.e2e
@@ -119,6 +120,7 @@ async def test_spicedb_read_relationships_unknown_user(spicedb):
 # ---------------------------------------------------------------------------
 # Full engine pipeline tests (SpiceDB identity + ChromaDB knowledge)
 # ---------------------------------------------------------------------------
+
 
 @requires_spicedb
 @pytest.mark.e2e
@@ -189,3 +191,19 @@ async def test_charlie_sees_all_doc_types(engine):
 
     assert "e2e_finance_budget" in finance_ids
     assert "e2e_eng_runbook" in eng_ids
+
+
+@requires_spicedb
+@pytest.mark.e2e
+@pytest.mark.asyncio
+async def test_intern_inherits_public_through_a_team(engine):
+    """ReBAC: the intern holds no tag directly; team:interns grants public."""
+    assert await engine.resolve_scope("intern") == {"public"}
+
+
+@requires_spicedb
+@pytest.mark.e2e
+@pytest.mark.asyncio
+async def test_platform_admin_comes_from_spicedb(engine):
+    assert await engine.is_admin("root")
+    assert not await engine.is_admin("charlie")
