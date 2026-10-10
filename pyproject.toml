@@ -26,7 +26,27 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "e2e: end-to-end tests that require live backends (SpiceDB, ChromaDB, AWS)",
+    "aws: tests that call a deployed AWS stack",
+    "redteam: adversarial tests; the leak rate must stay at zero",
+    "conformance: identical decisions across every adapter",
+    "load: latency and recall benchmarks (not run in CI)",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["infra/cdk/cdk.out", "infra/cdk/node_modules"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["sentinel"]
+
+[tool.pyright]
+include = ["sentinel"]
+pythonVersion = "3.11"
+typeCheckingMode = "strict"
 
 [tool.hatch.build.targets.wheel]
 packages = ["sentinel"]

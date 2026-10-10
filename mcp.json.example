@@ -5,6 +5,7 @@
       "command": "uv",
       "args": ["run", "python", "-m", "sentinel.main"],
       "env": {
+        "SENTINEL_STDIO_USER": "alice",
         "SENTINEL_IDENTITY_STORE": "sqlite",
         "SQLITE_DB_PATH": "/absolute/path/to/Sentinel/data/permissions.db",
         "SENTINEL_KNOWLEDGE_STORE": "chroma",

@@ -19,10 +19,10 @@ import socket
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Availability probes
 # ---------------------------------------------------------------------------
+
 
 def _port_open(host: str, port: int, timeout: float = 1.0) -> bool:
     try:
@@ -54,5 +54,6 @@ requires_spicedb = pytest.mark.skipif(
 
 requires_aws = pytest.mark.skipif(
     not aws_e2e_configured(),
-    reason="AWS E2E env vars not set (DDB_TABLE_NAME, BEDROCK_KB_ID, BEDROCK_S3_BUCKET, AWS_REGION)",
+    reason="AWS E2E env vars not set "
+    "(DDB_TABLE_NAME, BEDROCK_KB_ID, BEDROCK_S3_BUCKET, AWS_REGION)",
 )

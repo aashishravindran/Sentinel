@@ -13,7 +13,6 @@ Run with:
 
 import pytest
 import pytest_asyncio
-
 from sentinel_engine.connectors.identity.spicedb import SpiceDBIdentityConnector
 from sentinel_engine.connectors.knowledge.chroma import ChromaKnowledgeConnector
 from sentinel_engine.engine import AccessDeniedError, SentinelEngine
@@ -28,15 +27,16 @@ SPICEDB_ENDPOINT = "localhost:50051"
 SPICEDB_TOKEN = "sentinel-local"
 
 SEED_DOCS = [
-    ("e2e_public_overview",  "Company overview open to all staff.",             ["public"]),
-    ("e2e_finance_budget",   "2026 budget: $88.9M total opex planned.",         ["finance"]),
-    ("e2e_eng_runbook",      "On-call runbook: check Grafana dashboard first.", ["engineering"]),
-    ("e2e_internal_roadmap", "Roadmap: Series D in Q3, AI pod in Q1.",          ["finance", "engineering"]),
+    ("e2e_public_overview", "Company overview open to all staff.", ["public"]),
+    ("e2e_finance_budget", "2026 budget: $88.9M total opex planned.", ["finance"]),
+    ("e2e_eng_runbook", "On-call runbook: check Grafana dashboard first.", ["engineering"]),
+    ("e2e_internal_roadmap", "Roadmap: Series D in Q3, AI pod in Q1.", ["finance", "engineering"]),
 ]
 
 # ---------------------------------------------------------------------------
 # Module-scoped fixtures (embedding model loaded once per test session)
 # ---------------------------------------------------------------------------
+
 
 @pytest_asyncio.fixture(scope="module")
 async def spicedb():
@@ -63,6 +63,7 @@ async def engine(spicedb, chroma):
 # ---------------------------------------------------------------------------
 # SpiceDB identity connector tests
 # ---------------------------------------------------------------------------
+
 
 @requires_spicedb
 @pytest.mark.e2e
@@ -119,6 +120,7 @@ async def test_spicedb_read_relationships_unknown_user(spicedb):
 # ---------------------------------------------------------------------------
 # Full engine pipeline tests (SpiceDB identity + ChromaDB knowledge)
 # ---------------------------------------------------------------------------
+
 
 @requires_spicedb
 @pytest.mark.e2e

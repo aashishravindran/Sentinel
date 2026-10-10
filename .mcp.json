@@ -6,6 +6,7 @@
       "args": ["run", "python", "-m", "sentinel.main"],
       "cwd": "/Users/raashish/Documents/Sentinel",
       "env": {
+        "SENTINEL_STDIO_USER": "alice",
         "SENTINEL_IDENTITY_STORE": "spicedb",
         "SENTINEL_KNOWLEDGE_STORE": "chroma",
 
@@ -26,6 +27,7 @@
       "args": ["run", "python", "-m", "sentinel.main"],
       "cwd": "/Users/raashish/Documents/Sentinel",
       "env": {
+        "SENTINEL_STDIO_USER": "alice",
         "SENTINEL_IDENTITY_STORE": "iam",
         "SENTINEL_KNOWLEDGE_STORE": "bedrock",
 

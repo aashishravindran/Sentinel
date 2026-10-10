@@ -3571,6 +3571,7 @@ dev = [
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
     { name = "ruff", specifier = ">=0.6" },
+    { name = "types-aioboto3", extras = ["bedrock-agent", "bedrock-agent-runtime", "dynamodb", "iam", "s3"], specifier = ">=15.5.0" },
 ]
 
 [[package]]
