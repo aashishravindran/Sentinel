@@ -122,3 +122,11 @@ async def test_every_decision_is_logged_with_the_user_and_their_tags(caplog):
 async def test_lambda_target_calls_are_denied_up_front_for_tagless_users():
     call = tool_call(LAMBDA_TOOL, {"query": "budget"})
     assert short_circuit(await intercept_request(request_event(call, bearer("ghost")), runtime()))
+
+
+async def test_what_can_i_access_gets_a_sealed_principal_only():
+    call = tool_call("sentinel___what_can_i_access", {"user_id": "charlie"})
+    out = await intercept_request(request_event(call, bearer("intern")), runtime())
+    arguments = forwarded(out)["params"]["arguments"]
+    assert set(arguments) == {ENVELOPE_ARGUMENT}
+    assert open_envelope(arguments[ENVELOPE_ARGUMENT], {}, ENVELOPE_KEY) == "intern"

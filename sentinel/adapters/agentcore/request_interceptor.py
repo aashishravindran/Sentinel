@@ -25,7 +25,7 @@ from sentinel.adapters.agentcore.runtime import Runtime, get_runtime
 logger = logging.getLogger("sentinel.agentcore.request")
 
 PASSTHROUGH_METHODS = frozenset({"initialize", "ping", "tools/list"})
-ALLOWED_TOOLS = frozenset({"secure_search", "Retrieve"})
+ALLOWED_TOOLS = frozenset({"secure_search", "what_can_i_access", "Retrieve"})
 MAX_QUERY_CHARS = 2000
 DEFAULT_RESULTS = 5
 MAX_RESULTS = 20
@@ -61,8 +61,11 @@ async def rewrite_arguments(
         # AgenticRetrieveStream streams past the interceptors; every other tool is unknown.
         raise PermissionError(f"tool {event.tool_name!r} is not allowed through Sentinel")
     scope = await runtime.engine.resolve_scope(principal.user_id)
-    query, n_results = _query(event), _n_results(event)
+    if event.tool_name == "what_can_i_access":
+        sealed: dict[str, Any] = {}
+        return scope, {ENVELOPE_ARGUMENT: seal(principal.user_id, sealed, runtime.envelope_key)}
 
+    query, n_results = _query(event), _n_results(event)
     if event.tool_name == "secure_search":
         arguments: dict[str, Any] = {"query": query, "n_results": n_results}
         arguments[ENVELOPE_ARGUMENT] = seal(principal.user_id, arguments, runtime.envelope_key)

@@ -24,7 +24,7 @@ from sentinel_engine.telemetry import collect_timings
 
 from sentinel.adapters.agentcore.request_interceptor import intercept_request
 from sentinel.adapters.agentcore.response_interceptor import intercept_response
-from sentinel.adapters.agentcore.target import secure_search
+from sentinel.adapters.agentcore.target import run_tool
 from tests.support.fakes import DictIdentity, StubBedrockKB
 from tests.support.gateway import (
     LAMBDA_TOOL,
@@ -75,7 +75,7 @@ async def bench_gateway(n: int) -> Samples:
         rewritten = forwarded(out)
         payload = await timed(
             "lambda target",
-            lambda w=rewritten: secure_search(LAMBDA_TOOL, w["params"]["arguments"], rt),
+            lambda w=rewritten: run_tool(LAMBDA_TOOL, w["params"]["arguments"], rt),
         )
         response = tool_result(request["id"], payload)
         await timed(

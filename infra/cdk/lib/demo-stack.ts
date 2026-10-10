@@ -20,7 +20,8 @@ export interface SentinelDemoStackProps extends StackProps {
    */
   readonly knowledgeBase:
     | { readonly existing: 'managed-kb' | 'standard'; readonly knowledgeBaseId: string }
-    | { readonly create: 'managed-kb' };
+    | { readonly create: 'managed-kb' }
+    | { readonly none: true };
 }
 
 /** A complete demo org: Cognito users, a DynamoDB identity store, a knowledge base and the gateway. */
@@ -29,6 +30,7 @@ export class SentinelDemoStack extends Stack {
     super(scope, id, props);
 
     const userPool = new cognito.UserPool(this, 'Users', {
+      featurePlan: cognito.FeaturePlan.LITE,
       selfSignUpEnabled: false,
       signInAliases: { username: true },
       passwordPolicy: {
@@ -58,7 +60,9 @@ export class SentinelDemoStack extends Stack {
     });
 
     let knowledgeBase: KnowledgeBaseTarget;
-    if ('existing' in props.knowledgeBase) {
+    if ('none' in props.knowledgeBase) {
+      knowledgeBase = { kind: 'none' };
+    } else if ('existing' in props.knowledgeBase) {
       const { existing, knowledgeBaseId } = props.knowledgeBase;
       knowledgeBase =
         existing === 'managed-kb' ? { kind: 'managed-kb', knowledgeBaseId } : { kind: 'lambda-target', knowledgeBaseId };

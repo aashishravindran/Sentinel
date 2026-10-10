@@ -16,7 +16,9 @@ export type KnowledgeBaseTarget =
   /** Native connector to a Bedrock Managed Knowledge Base; the request interceptor writes its filter. */
   | { readonly kind: 'managed-kb'; readonly knowledgeBaseId: string; readonly forwardUserContext?: boolean }
   /** Sentinel's Lambda target in front of any standard Bedrock Knowledge Base. */
-  | { readonly kind: 'lambda-target'; readonly knowledgeBaseId: string; readonly searchType?: 'HYBRID' | 'SEMANTIC' };
+  | { readonly kind: 'lambda-target'; readonly knowledgeBaseId: string; readonly searchType?: 'HYBRID' | 'SEMANTIC' }
+  /** No documents: the Lambda target serves `what_can_i_access` only. Exercises auth, identity and logging. */
+  | { readonly kind: 'none' };
 
 export interface OidcIssuer {
   /** OpenID discovery document, e.g. https://cognito-idp.<region>.amazonaws.com/<pool>/.well-known/openid-configuration */
@@ -62,11 +64,14 @@ export class SentinelGateway extends Construct {
   constructor(scope: Construct, id: string, props: SentinelGatewayProps) {
     super(scope, id);
     const { oidc, knowledgeBase } = props;
-    const knowledgeBaseArn = Stack.of(this).formatArn({
-      service: 'bedrock',
-      resource: 'knowledge-base',
-      resourceName: knowledgeBase.knowledgeBaseId,
-    });
+    const knowledgeBaseArn =
+      knowledgeBase.kind === 'none'
+        ? undefined
+        : Stack.of(this).formatArn({
+            service: 'bedrock',
+            resource: 'knowledge-base',
+            resourceName: knowledgeBase.knowledgeBaseId,
+          });
 
     const environment: Record<string, string> = {
       SENTINEL_IDENTITY_STORE: 'dynamodb',
@@ -144,43 +149,60 @@ export class SentinelGateway extends Construct {
       ],
     });
 
-    if (knowledgeBase.kind === 'lambda-target') {
-      const target = fn('SecureSearchTarget', 'sentinel.adapters.agentcore.target.handler', {
-        SENTINEL_KNOWLEDGE_STORE: 'bedrock',
-        BEDROCK_KB_ID: knowledgeBase.knowledgeBaseId,
-        BEDROCK_SEARCH_TYPE: knowledgeBase.searchType ?? 'HYBRID',
-      });
-      target.addToRolePolicy(
-        new iam.PolicyStatement({ actions: ['bedrock:Retrieve'], resources: [knowledgeBaseArn] }),
+    if (knowledgeBase.kind !== 'managed-kb') {
+      const searchable = knowledgeBase.kind === 'lambda-target';
+      const target = fn(
+        'SentinelTarget',
+        'sentinel.adapters.agentcore.target.handler',
+        searchable
+          ? {
+              SENTINEL_KNOWLEDGE_STORE: 'bedrock',
+              BEDROCK_KB_ID: knowledgeBase.knowledgeBaseId,
+              BEDROCK_SEARCH_TYPE: knowledgeBase.searchType ?? 'HYBRID',
+            }
+          : {},
       );
+      if (searchable && knowledgeBaseArn) {
+        target.addToRolePolicy(
+          new iam.PolicyStatement({ actions: ['bedrock:Retrieve'], resources: [knowledgeBaseArn] }),
+        );
+      }
       this.target = target;
-      this.gateway.addLambdaTarget('SecureSearch', {
-        gatewayTargetName: 'sentinel',
-        description: 'Permission-aware search over the knowledge base',
-        lambdaFunction: target,
-        toolSchema: agentcore.ToolSchema.fromInline([
-          {
-            name: 'secure_search',
-            description:
-              'Search the knowledge base as the signed-in user. Only documents they may read are searched.',
-            inputSchema: {
-              type: agentcore.SchemaDefinitionType.OBJECT,
-              properties: {
-                query: { type: agentcore.SchemaDefinitionType.STRING, description: 'What to search for' },
-                n_results: { type: agentcore.SchemaDefinitionType.INTEGER, description: 'Results to return (1-20)' },
-                // Set by the request interceptor and hidden from tools/list by the response interceptor.
-                _sentinel_principal: { type: agentcore.SchemaDefinitionType.STRING },
-              },
-              required: ['query'],
+      // Set by the request interceptor and hidden from tools/list by the response interceptor.
+      const principal = { _sentinel_principal: { type: agentcore.SchemaDefinitionType.STRING } };
+      const tools: agentcore.ToolDefinition[] = [
+        {
+          name: 'what_can_i_access',
+          description: 'The access tags the signed-in user holds right now. Informational only.',
+          inputSchema: { type: agentcore.SchemaDefinitionType.OBJECT, properties: principal },
+        },
+      ];
+      if (searchable) {
+        tools.push({
+          name: 'secure_search',
+          description: 'Search the knowledge base as the signed-in user. Only documents they may read are searched.',
+          inputSchema: {
+            type: agentcore.SchemaDefinitionType.OBJECT,
+            properties: {
+              query: { type: agentcore.SchemaDefinitionType.STRING, description: 'What to search for' },
+              n_results: { type: agentcore.SchemaDefinitionType.INTEGER, description: 'Results to return (1-20)' },
+              ...principal,
             },
+            required: ['query'],
           },
-        ]),
+        });
+      }
+      this.gateway.addLambdaTarget('SentinelTools', {
+        gatewayTargetName: 'sentinel',
+        description: 'Sentinel tools, run as the signed-in user',
+        lambdaFunction: target,
+        toolSchema: agentcore.ToolSchema.fromInline(tools),
       });
     } else {
       this.gateway.role.addToPrincipalPolicy(
         new iam.PolicyStatement({
           actions: ['bedrock:GetKnowledgeBase', 'bedrock:Retrieve'],
-          resources: [knowledgeBaseArn],
+          resources: [knowledgeBaseArn ?? ''],
         }),
       );
       // Exposed only so the request interceptor may write them; the response

@@ -112,6 +112,15 @@ describe('SentinelGateway', () => {
     );
   });
 
+  test('none mode serves what_can_i_access and grants no Bedrock access', () => {
+    const template = synth({ kind: 'none' });
+    template.resourceCountIs('AWS::Lambda::Function', 3);
+    const target = JSON.stringify(template.findResources('AWS::BedrockAgentCore::GatewayTarget'));
+    expect(target).toContain('what_can_i_access');
+    expect(target).not.toContain('secure_search');
+    expect(JSON.stringify(template.findResources('AWS::IAM::Policy'))).not.toContain('bedrock:');
+  });
+
   test('no function uses the broad AWSLambdaBasicExecutionRole', () => {
     expect(JSON.stringify(synth(STANDARD).toJSON())).not.toContain('AWSLambdaBasicExecutionRole');
   });

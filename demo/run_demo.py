@@ -37,7 +37,7 @@ from sentinel.adapters.agentcore.events import TOOL_NAME_SEPARATOR  # noqa: E402
 from sentinel.adapters.agentcore.request_interceptor import intercept_request  # noqa: E402
 from sentinel.adapters.agentcore.response_interceptor import intercept_response  # noqa: E402
 from sentinel.adapters.agentcore.runtime import Runtime  # noqa: E402
-from sentinel.adapters.agentcore.target import secure_search  # noqa: E402
+from sentinel.adapters.agentcore.target import run_tool  # noqa: E402
 from sentinel.adapters.mcp.server import create_server  # noqa: E402
 from sentinel.adapters.mcp.settings import ServerSettings  # noqa: E402
 from sentinel.ingest.documents import ingest_documents, load_tagged_documents  # noqa: E402
@@ -113,7 +113,7 @@ async def ask_gateway(runtime: Runtime, keys: RSAKeyPair, user: str) -> list[str
     if "transformedGatewayResponse" in out:
         return []
     rewritten = out["transformedGatewayRequest"]["body"]
-    payload = await secure_search(TOOL, rewritten["params"]["arguments"], runtime)
+    payload = await run_tool(TOOL, rewritten["params"]["arguments"], runtime)
     reply = {
         "jsonrpc": "2.0",
         "id": 1,

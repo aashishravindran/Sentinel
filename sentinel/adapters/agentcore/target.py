@@ -2,7 +2,7 @@
 # Use of this software is governed by the Elastic License 2.0
 # found in the LICENSE file.
 
-"""Lambda target exposing ``secure_search`` behind AgentCore Gateway.
+"""Lambda target exposing ``secure_search`` and ``what_can_i_access`` behind AgentCore Gateway.
 
 Used with any knowledge base the native connector cannot reach (for example a
 standard, non-managed Bedrock KB). The caller comes from the principal
@@ -24,17 +24,18 @@ from sentinel.adapters.agentcore.runtime import Runtime, get_runtime
 
 logger = logging.getLogger("sentinel.agentcore.target")
 
-TOOL_NAME = "secure_search"
 
-
-async def secure_search(
-    tool_name: str, arguments: dict[str, Any], runtime: Runtime
-) -> dict[str, Any]:
+async def run_tool(tool_name: str, arguments: dict[str, Any], runtime: Runtime) -> dict[str, Any]:
+    """Run one gateway tool call for the caller sealed in its principal envelope."""
+    tool = tool_name.rpartition(TOOL_NAME_SEPARATOR)[2]
     try:
-        if tool_name.rpartition(TOOL_NAME_SEPARATOR)[2] != TOOL_NAME:
-            raise AccessDeniedError(f"unknown tool {tool_name!r}")
         signed = {k: v for k, v in arguments.items() if k != ENVELOPE_ARGUMENT}
         user_id = open_envelope(arguments.get(ENVELOPE_ARGUMENT), signed, runtime.envelope_key)
+        if tool == "what_can_i_access":
+            scope = await runtime.engine.resolve_scope(user_id)
+            return {"user": user_id, "tags": sorted(scope)}
+        if tool != "secure_search":
+            raise AccessDeniedError(f"unknown tool {tool_name!r}")
         chunks = await runtime.engine.secure_search(
             str(signed["query"]), Principal(user_id, "gateway"), int(signed["n_results"])
         )
@@ -57,4 +58,4 @@ def _tool_name(context: Any) -> str:
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     runtime = get_runtime()
-    return runtime.run(secure_search(_tool_name(context), event, runtime))
+    return runtime.run(run_tool(_tool_name(context), event, runtime))
