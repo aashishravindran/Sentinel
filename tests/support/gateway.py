@@ -16,7 +16,7 @@ from sentinel_engine.oidc import TokenVerifier
 from sentinel.adapters.agentcore.request_interceptor import intercept_request
 from sentinel.adapters.agentcore.response_interceptor import intercept_response
 from sentinel.adapters.agentcore.runtime import Runtime
-from sentinel.adapters.agentcore.target import secure_search
+from sentinel.adapters.agentcore.target import run_tool
 from tests.support.fakes import DictIdentity, StubBedrockKB
 from tests.support.tokens import OIDC
 
@@ -114,7 +114,7 @@ async def call_through_gateway(
     rewritten = forwarded(out)
     args = rewritten["params"]["arguments"]
     if tool == LAMBDA_TOOL:
-        payload = await secure_search(tool, args, rt)
+        payload = await run_tool(tool, args, rt)
     else:
         kb = rt.engine.knowledge
         assert isinstance(kb, StubBedrockKB)

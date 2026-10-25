@@ -65,10 +65,12 @@ def parse(event: Mapping[str, Any]) -> GatewayEvent:
     headers = {str(k).lower(): str(v) for k, v in _as_dict(request.get("headers") or {}).items()}
     raw_response = mcp.get("gatewayResponse")
     response = _as_dict(raw_response) if raw_response is not None else None
+    response_body = response.get("body") if response else None
     return GatewayEvent(
         request=_as_dict(request.get("body")),
         headers=headers,
-        response=_as_dict(response.get("body")) if response else None,
+        # Notifications are answered with 202 and no body; keep that as "no response body".
+        response=_as_dict(response_body) if response_body not in (None, "") else None,
         response_status=int(response.get("statusCode", 200)) if response else 200,
         streaming=bool(response.get("isStreamingResponse")) if response else False,
     )

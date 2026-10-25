@@ -140,3 +140,13 @@ async def test_recheck_is_logged_with_kept_and_dropped_counts(caplog):
     await intercept_response(response_event(request, response, bearer("intern")), runtime())
     (record,) = caplog.records
     assert (record.user, record.tags, record.kept, record.dropped) == ("intern", ["public"], 1, 1)
+
+
+@pytest.mark.parametrize("empty_body", ["", None])
+async def test_notifications_pass_through_with_their_status(empty_body):
+    """Live finding: the gateway hands notifications to the interceptor as 202 with no body."""
+    event = response_event({"jsonrpc": "2.0", "method": "notifications/initialized"}, {})
+    event["mcp"]["gatewayResponse"].update({"statusCode": 202, "body": empty_body})
+    out = (await intercept_response(event, runtime()))["mcp"]["transformedGatewayResponse"]
+    assert out["statusCode"] == 202
+    assert "result" not in out["body"]

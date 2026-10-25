@@ -30,6 +30,8 @@ HIDDEN_ARGUMENTS = frozenset(
 )
 HIDDEN_TOOL_SUFFIXES = ("AgenticRetrieveStream",)
 RESULT_LISTS = ("retrievalResults", "results")
+# Tools that return no documents; the caller is still re-verified.
+DOCUMENT_FREE_TOOLS = frozenset({"what_can_i_access"})
 
 
 def strip_hidden_arguments(schema: Any) -> Any:
@@ -92,6 +94,9 @@ async def recheck_tool_result(
         return body
     principal = runtime.verifier.verify_authorization_header(event.authorization, "gateway")
     scope = await runtime.engine.resolve_scope(principal.user_id)
+    if event.tool_name in DOCUMENT_FREE_TOOLS:
+        logger.info("recheck", extra={"tool": event.tool_name, "user": principal.user_id})
+        return body
     counts = {"kept": 0, "dropped": 0}
     content: list[dict[str, Any]] = []
     for item in result.get("content", []):
@@ -115,6 +120,7 @@ async def intercept_response(raw_event: dict[str, Any], runtime: Runtime) -> dic
         if event.method == "tools/list":
             return respond(sanitize_tool_list(body), event.response_status)
         if event.method != "tools/call":
+            # initialize, ping, notifications: nothing to authorize, pass through unchanged.
             return respond(body, event.response_status)
         if event.streaming:
             raise PermissionError("streaming tool results cannot be re-checked")
