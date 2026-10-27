@@ -190,7 +190,9 @@ docs/                         ADRs, threat model, benchmarks
 ```
 
 The engine, connectors and filter builders live in
-[sentinel-engine](https://github.com/aashishravindran/sentinel-engine).
+[sentinel-engine](https://github.com/aashishravindran/sentinel-engine), published on PyPI as
+[`sentinel-authz`](https://pypi.org/project/sentinel-authz/) (`pip install sentinel-authz`; imported as
+`sentinel_engine`).
 
 ## Documentation
 

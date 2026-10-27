@@ -11,7 +11,7 @@ one policy engine:
   and a Lambda target, deployed by the TypeScript CDK construct in `infra/cdk`.
 
 The engine, connectors, filter builders, OIDC verification and ingest stamping live in
-**sentinel-engine** (github.com/aashishravindran/sentinel-engine, package `sentinel_engine`),
+**sentinel-engine** (github.com/aashishravindran/sentinel-engine, on PyPI as `sentinel-authz`, package `sentinel_engine`),
 pinned by git tag in `[tool.uv.sources]`.
 
 ## Layout

@@ -1,10 +1,11 @@
 [project]
 name = "sentinel-rag"
 version = "0.2.0"
-description = "Permission-aware RAG for AI agents: MCP server and AgentCore Gateway adapters over sentinel-engine"
+description = "Permission-aware RAG for AI agents: MCP server and AgentCore Gateway adapters over sentinel-authz"
 requires-python = ">=3.11"
 dependencies = [
-    "sentinel-engine[sqlite,spicedb,aws,chroma]",
+    # github.com/aashishravindran/sentinel-engine, published as sentinel-authz; import sentinel_engine.
+    "sentinel-authz[sqlite,spicedb,aws,chroma]>=0.2,<0.3",
     "fastmcp>=3.1.1,<4",
     "pypdf>=4.0",
     "python-dotenv>=1.0",
@@ -18,9 +19,6 @@ dev = [
     "pyright>=1.1.380",
     "boto3-stubs[secretsmanager]>=1.43.111",
 ]
-
-[tool.uv.sources]
-sentinel-engine = { git = "https://github.com/aashishravindran/sentinel-engine", tag = "v0.1.0" }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
