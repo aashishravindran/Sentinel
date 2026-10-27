@@ -5,6 +5,9 @@ on:
     branches: [master]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   python:
     runs-on: ubuntu-latest
@@ -61,3 +64,59 @@ jobs:
           npm test
           npx cdk synth --quiet -c knowledgeBaseId=EXAMPLEKB01 -c knowledgeBaseKind=standard
           npx cdk synth --quiet -c knowledgeBaseId=EXAMPLEKB01 -c knowledgeBaseKind=managed-kb
+      # Deploy exactly what was tested, not a rebuild.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: lambda
+          path: Sentinel/build/lambda
+          retention-days: 7
+
+  # Pushes to master deploy the AgentCore Gateway stack (SentinelDemo) once both jobs pass, then run a
+  # live smoke test. The role only deploys this stack; see infra/cdk/lib/cicd-stack.ts.
+  deploy:
+    needs: [python, cdk]
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: Sentinel
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: Sentinel
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: lambda
+          path: Sentinel/build/lambda
+      # Install everything before AWS credentials exist, so install scripts never see them.
+      - name: Install dependencies
+        run: |
+          npm ci --prefix infra/cdk
+          uv sync
+      # Role ARNs are environment secrets and the account ID is masked: these logs are public.
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+          role-duration-seconds: 1800
+      - name: Deploy SentinelDemo
+        working-directory: Sentinel/infra/cdk
+        run: npx cdk deploy SentinelDemo --exclusively --require-approval never --role-arn "$CFN_EXEC_ROLE_ARN"
+        env:
+          CFN_EXEC_ROLE_ARN: ${{ secrets.CFN_EXEC_ROLE_ARN }}
+      - name: Live smoke test
+        run: uv run python -m demo.smoke
