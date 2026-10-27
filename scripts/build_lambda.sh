@@ -2,35 +2,34 @@
 # -----------------------------------------------------------------------------
 # scripts/build_lambda.sh
 #
-# Builds build/lambda: the AgentCore adapter plus sentinel-engine and its AWS
-# dependencies, as arm64 manylinux wheels for the Python 3.14 Lambda runtime.
-# No Docker needed. ChromaDB and torch are not included.
+# Builds build/lambda: the AgentCore adapter plus sentinel-authz (imported as
+# sentinel_engine) and its AWS dependencies, as arm64 manylinux wheels for the
+# Python 3.14 Lambda runtime. No Docker needed. ChromaDB and torch are not included.
 #
 # Usage:
-#   ./scripts/build_lambda.sh                          # ../sentinel-engine if present,
-#                                                      # else the pinned tag from GitHub
-#   SENTINEL_ENGINE_REF=v0.2.0 ./scripts/build_lambda.sh
+#   ./scripts/build_lambda.sh                                         # version from uv.lock
+#   SENTINEL_ENGINE_DIR=../sentinel-engine ./scripts/build_lambda.sh  # a local engine checkout
 # -----------------------------------------------------------------------------
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${ROOT}/build/lambda"
 WHEELS="${ROOT}/build/wheels"
-ENGINE_DIR="${SENTINEL_ENGINE_DIR:-${ROOT}/../sentinel-engine}"
-ENGINE_REF="${SENTINEL_ENGINE_REF:-v0.1.0}"
 
-rm -rf "${OUT}" "${WHEELS}" "${ROOT}/build/sentinel-engine"
+rm -rf "${OUT}" "${WHEELS}"
 mkdir -p "${OUT}/sentinel/adapters" "${WHEELS}"
 
-if [[ ! -d "${ENGINE_DIR}" ]]; then
-  # No local checkout: build the pinned release.
-  ENGINE_DIR="${ROOT}/build/sentinel-engine"
-  git clone --quiet --depth 1 --branch "${ENGINE_REF}" \
-    https://github.com/aashishravindran/sentinel-engine "${ENGINE_DIR}"
+if [[ -n "${SENTINEL_ENGINE_DIR:-}" ]]; then
+  # Co-development: build the local checkout instead of the published release.
+  uv build --quiet --wheel --out-dir "${WHEELS}" "${SENTINEL_ENGINE_DIR}"
+  ENGINE_SPEC="sentinel-authz[aws] @ file://$(ls "${WHEELS}"/sentinel_authz-*.whl)"
+else
+  # The same version the tests ran against.
+  VERSION=$(cd "${ROOT}" && uv export --quiet --frozen --no-dev --no-hashes --no-annotate \
+    | sed -n 's/^sentinel-authz==\([^ ;]*\).*/\1/p')
+  [[ -n "${VERSION}" ]] || { echo "sentinel-authz not found in uv.lock" >&2; exit 1; }
+  ENGINE_SPEC="sentinel-authz[aws]==${VERSION}"
 fi
-# Pure-Python package: build its wheel here so every dependency can stay binary-only.
-uv build --quiet --wheel --out-dir "${WHEELS}" "${ENGINE_DIR}"
-ENGINE_SPEC="sentinel-engine[aws] @ file://$(ls "${WHEELS}"/sentinel_engine-*.whl)"
 
 uv pip install \
   --quiet \
