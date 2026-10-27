@@ -10,3 +10,4 @@
 | [0006](0006-principal-envelope.md) | A signed principal envelope for the Lambda target | Accepted |
 | [0007](0007-dynamodb-identity-for-gateway.md) | DynamoDB identity for Gateway mode; SpiceDB later | Accepted |
 | [0008](0008-no-implicit-knowledge-base.md) | Infrastructure never creates a knowledge base implicitly | Accepted |
+| [0009](0009-continuous-deploy.md) | Continuous deploy of the demo gateway through scoped roles | Accepted |

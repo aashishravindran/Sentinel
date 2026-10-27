@@ -21,3 +21,4 @@ build/
 
 # Demo persona passwords (created by demo/provision_users.py)
 demo/.users.json
+.DS_Store

@@ -161,6 +161,23 @@ The construct creates no knowledge base and no warm capacity unless you ask for 
 
 See [infra/cdk](infra/cdk) for the construct's props.
 
+### Continuous deploy
+
+Merging to `master` deploys the demo gateway (`SentinelDemo`, no knowledge base) once the `python` and
+`cdk` checks pass, then runs a live smoke test (`demo/smoke.py`): tokens are required, a user sees
+exactly their identity item's tags, a `user_id` argument changes nothing, control arguments stay
+hidden, and removing a user's tags applies on the next call.
+
+- `master` takes pull requests only, with the checks green and an approving review; auto-merge is off.
+- GitHub signs in to AWS with OIDC (no stored keys), only from the `production` environment on
+  `master`. The deploy role can change only the `SentinelDemo` stack; CloudFormation runs as a scoped
+  execution role; every role the stack creates carries the `sentinel-demo-boundary` permissions
+  boundary. These live in `SentinelCiCd`, which is deployed by hand so the pipeline can't widen itself.
+- Deploys that create a knowledge base (`-c createManagedKb=true`) are outside the execution role;
+  run them by hand.
+
+See [ADR 0009](docs/adr/0009-continuous-deploy.md).
+
 ## Where Sentinel fits
 
 | Layer | Question | Who answers |
